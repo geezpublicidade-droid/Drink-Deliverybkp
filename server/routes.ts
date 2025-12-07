@@ -37,7 +37,11 @@ export async function registerRoutes(
   });
 
   app.post("/api/users", async (req, res) => {
-    const user = await storage.createUser(req.body);
+    const userData = { ...req.body };
+    if (userData.password) {
+      userData.password = await bcrypt.hash(userData.password, SALT_ROUNDS);
+    }
+    const user = await storage.createUser(userData);
     res.status(201).json(user);
   });
 
@@ -51,19 +55,27 @@ export async function registerRoutes(
     const { username, password, role } = req.body;
     const users = await storage.getUsers();
     
-    let user;
+    let candidates;
     if (role) {
-      user = users.find(u => 
+      candidates = users.filter(u => 
         u.name.toLowerCase() === username.toLowerCase() && 
-        u.password === password &&
         u.role === role
       );
     } else {
-      user = users.find(u => 
+      candidates = users.filter(u => 
         u.name.toLowerCase() === username.toLowerCase() && 
-        u.password === password &&
         (u.role === 'admin' || u.role === 'kitchen' || u.role === 'motoboy' || u.role === 'pdv')
       );
+    }
+    
+    let user = null;
+    for (const candidate of candidates) {
+      if (!candidate.password) continue;
+      const isValid = await bcrypt.compare(password, candidate.password);
+      if (isValid) {
+        user = candidate;
+        break;
+      }
     }
     
     if (!user) {

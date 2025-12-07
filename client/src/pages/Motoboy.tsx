@@ -32,16 +32,17 @@ export default function Motoboy() {
   const { user, role, logout } = useAuth();
 
   const { data: orders = [], isLoading, refetch } = useQuery<OrderWithDetails[]>({
-    queryKey: ['/api/orders', 'motoboy', user?.id],
+    queryKey: ['/api/orders'],
     refetchInterval: 10000,
     enabled: !!user?.id,
   });
 
-  const { data: motoboys = [] } = useQuery<Motoboy[]>({
+  const { data: motoboys = [], isLoading: motoboyLoading } = useQuery<Motoboy[]>({
     queryKey: ['/api/motoboys'],
   });
 
   const currentMotoboy = motoboys.find(m => m.whatsapp === user?.whatsapp);
+  const motoboyReady = !motoboyLoading && !!currentMotoboy;
 
   const assignMutation = useMutation({
     mutationFn: async (orderId: string) => {
@@ -271,11 +272,11 @@ export default function Motoboy() {
                           <Button
                             className="w-full bg-green-600 text-white py-6 text-lg font-semibold"
                             onClick={() => assignMutation.mutate(order.id)}
-                            disabled={assignMutation.isPending || !currentMotoboy}
+                            disabled={assignMutation.isPending || motoboyLoading || !currentMotoboy}
                             data-testid={`button-accept-delivery-${order.id}`}
                           >
                             <Truck className="h-5 w-5 mr-2" />
-                            Aceitar Entrega
+                            {motoboyLoading ? 'Carregando...' : 'Aceitar Entrega'}
                           </Button>
                         </CardContent>
                       </Card>
