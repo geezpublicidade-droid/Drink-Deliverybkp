@@ -18,10 +18,12 @@ interface OrderWithDetails extends Order {
   address?: Address;
 }
 
-const PAYMENT_ICONS = {
+const PAYMENT_ICONS: Record<PaymentMethod, typeof Banknote> = {
   cash: Banknote,
   pix: QrCode,
   card_pos: CreditCard,
+  card_credit: CreditCard,
+  card_debit: CreditCard,
 };
 
 export default function Motoboy() {
@@ -76,8 +78,8 @@ export default function Motoboy() {
     return null;
   }
 
-  const dispatchedOrders = orders.filter(o => o.status === 'dispatched');
-  const readyOrders = orders.filter(o => o.status === 'ready');
+  const dispatchedOrders = orders.filter(o => o.status === 'dispatched' && o.orderType === 'delivery');
+  const readyOrders = orders.filter(o => o.status === 'ready' && o.orderType === 'delivery');
 
   return (
     <div className="min-h-screen bg-background">

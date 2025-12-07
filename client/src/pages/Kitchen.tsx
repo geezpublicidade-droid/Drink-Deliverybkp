@@ -1,6 +1,6 @@
 import { useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Clock, ChefHat, Package, LogOut, RefreshCw } from 'lucide-react';
+import { Clock, ChefHat, Package, LogOut, RefreshCw, Truck, User as UserIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import type { Order, OrderItem } from '@shared/schema';
-import { ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS, type OrderStatus, type PaymentMethod } from '@shared/schema';
+import { ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS, ORDER_TYPE_LABELS, type OrderStatus, type PaymentMethod, type OrderType } from '@shared/schema';
 import { useEffect, useState } from 'react';
 
 interface OrderWithItems extends Order {
@@ -139,11 +139,17 @@ export default function Kitchen() {
                     <Card key={order.id} className="bg-card border-primary/20" data-testid={`order-${order.id}`}>
                       <CardHeader className="flex flex-row items-start justify-between gap-4 pb-2">
                         <div>
-                          <CardTitle className="text-foreground text-xl">
-                            #{order.id.slice(-6).toUpperCase()}
-                          </CardTitle>
+                          <div className="flex items-center gap-2 mb-1">
+                            <CardTitle className="text-foreground text-xl">
+                              #{order.id.slice(-6).toUpperCase()}
+                            </CardTitle>
+                            <Badge className={order.orderType === 'counter' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' : 'bg-violet-500/20 text-violet-400 border-violet-500/30'}>
+                              {order.orderType === 'counter' ? <UserIcon className="h-3 w-3 mr-1" /> : <Truck className="h-3 w-3 mr-1" />}
+                              {ORDER_TYPE_LABELS[(order.orderType as OrderType) || 'delivery']}
+                            </Badge>
+                          </div>
                           <p className="text-muted-foreground text-sm">
-                            {order.userName || 'Cliente'}
+                            {order.customerName || order.userName || 'Cliente'}
                           </p>
                         </div>
                         <Badge className="bg-yellow/20 text-yellow border-yellow/30 flex items-center gap-1">
@@ -204,11 +210,17 @@ export default function Kitchen() {
                     <Card key={order.id} className="bg-card border-orange-500/30" data-testid={`order-${order.id}`}>
                       <CardHeader className="flex flex-row items-start justify-between gap-4 pb-2">
                         <div>
-                          <CardTitle className="text-foreground text-xl">
-                            #{order.id.slice(-6).toUpperCase()}
-                          </CardTitle>
+                          <div className="flex items-center gap-2 mb-1">
+                            <CardTitle className="text-foreground text-xl">
+                              #{order.id.slice(-6).toUpperCase()}
+                            </CardTitle>
+                            <Badge className={order.orderType === 'counter' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' : 'bg-violet-500/20 text-violet-400 border-violet-500/30'}>
+                              {order.orderType === 'counter' ? <UserIcon className="h-3 w-3 mr-1" /> : <Truck className="h-3 w-3 mr-1" />}
+                              {ORDER_TYPE_LABELS[(order.orderType as OrderType) || 'delivery']}
+                            </Badge>
+                          </div>
                           <p className="text-muted-foreground text-sm">
-                            {order.userName || 'Cliente'}
+                            {order.customerName || order.userName || 'Cliente'}
                           </p>
                         </div>
                         <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 flex items-center gap-1">

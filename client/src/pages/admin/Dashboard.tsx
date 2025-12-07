@@ -19,7 +19,9 @@ import {
   X,
   Clock,
   ChefHat,
-  MapPin
+  MapPin,
+  ShoppingCart,
+  User as UserIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,10 +36,11 @@ import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import type { Order, Product, Category, Banner, Motoboy, User, Settings as SettingsType } from '@shared/schema';
-import { ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS, type OrderStatus, type PaymentMethod } from '@shared/schema';
+import { ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS, ORDER_TYPE_LABELS, type OrderStatus, type PaymentMethod, type OrderType } from '@shared/schema';
 
 const tabs = [
   { id: 'pedidos', label: 'Pedidos', icon: Package },
+  { id: 'pdv', label: 'PDV', icon: ShoppingCart },
   { id: 'delivery', label: 'Delivery', icon: Truck },
   { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
   { id: 'clientes', label: 'Clientes', icon: Users },
