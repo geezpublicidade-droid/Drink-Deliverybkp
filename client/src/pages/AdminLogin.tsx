@@ -27,20 +27,22 @@ export default function AdminLogin() {
 
     setIsLoading(true);
     try {
-      const response = await apiRequest('POST', '/api/auth/admin-login', { username, password });
+      const response = await apiRequest('POST', '/api/auth/login', { username, password });
       const data = await response.json();
       
-      if (data.success) {
+      if (data.success && data.user) {
         login(data.user, data.role);
         toast({ title: 'Login realizado!', description: `Bem-vindo, ${data.user.name}!` });
         
-        if (data.role === 'admin') {
-          setLocation('/admin');
-        } else if (data.role === 'kitchen') {
-          setLocation('/cozinha');
-        } else if (data.role === 'motoboy') {
-          setLocation('/motoboy');
-        }
+        setTimeout(() => {
+          if (data.role === 'admin') {
+            window.location.href = '/admin';
+          } else if (data.role === 'kitchen') {
+            window.location.href = '/cozinha';
+          } else if (data.role === 'motoboy') {
+            window.location.href = '/motoboy';
+          }
+        }, 100);
       } else {
         toast({ title: 'Credenciais invalidas', variant: 'destructive' });
       }

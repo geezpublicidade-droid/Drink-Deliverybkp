@@ -32,15 +32,26 @@ export async function registerRoutes(
   app.post("/api/auth/login", async (req, res) => {
     const { username, password, role } = req.body;
     const users = await storage.getUsers();
-    const user = users.find(u => 
-      u.name.toLowerCase() === username.toLowerCase() && 
-      u.password === password &&
-      u.role === role
-    );
-    if (!user) {
-      return res.status(401).json({ error: "Invalid credentials" });
+    
+    let user;
+    if (role) {
+      user = users.find(u => 
+        u.name.toLowerCase() === username.toLowerCase() && 
+        u.password === password &&
+        u.role === role
+      );
+    } else {
+      user = users.find(u => 
+        u.name.toLowerCase() === username.toLowerCase() && 
+        u.password === password &&
+        (u.role === 'admin' || u.role === 'kitchen' || u.role === 'motoboy')
+      );
     }
-    res.json(user);
+    
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Invalid credentials" });
+    }
+    res.json({ success: true, user, role: user.role });
   });
 
   app.post("/api/auth/whatsapp", async (req, res) => {

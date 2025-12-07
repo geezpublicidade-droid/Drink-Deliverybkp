@@ -22,20 +22,19 @@ function detectCombo(items: CartItem[]): { hasCombo: boolean; discount: number }
   const gelos = items.filter(item => item.product.productType === 'gelo');
   const energeticos = items.filter(item => item.product.productType === 'energetico');
 
-  const geloCount = gelos.reduce((sum, item) => sum + item.quantity, 0);
-  const hasDestilado = destilados.length > 0;
-  const hasEnergetico = energeticos.length > 0;
-  const hasEnoughGelo = geloCount >= 5;
+  const hasDestilado = destilados.length > 0 && destilados.some(d => d.quantity >= 1);
+  const hasGelo = gelos.length > 0 && gelos.some(g => g.quantity >= 1);
+  const hasEnergetico = energeticos.length > 0 && energeticos.some(e => e.quantity >= 1);
 
-  if (hasDestilado && hasEnergetico && hasEnoughGelo) {
+  if (hasDestilado && hasGelo && hasEnergetico) {
     const destilado = destilados[0];
+    const gelo = gelos[0];
     const energetico = energeticos[0];
-    const geloItems = gelos.slice(0, 5);
 
     const comboTotal = 
       Number(destilado.product.salePrice) +
-      Number(energetico.product.salePrice) +
-      geloItems.reduce((sum, item) => sum + Number(item.product.salePrice) * Math.min(item.quantity, 5), 0);
+      Number(gelo.product.salePrice) +
+      Number(energetico.product.salePrice);
 
     return {
       hasCombo: true,
