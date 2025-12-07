@@ -1,6 +1,6 @@
 import { useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { MapPin, Phone, Banknote, CreditCard, QrCode, Package, LogOut, RefreshCw, Navigation, CheckCircle } from 'lucide-react';
+import { MapPin, Phone, Banknote, CreditCard, QrCode, Package, LogOut, RefreshCw, Navigation, CheckCircle, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import type { Order, OrderItem, Address } from '@shared/schema';
+import type { Order, OrderItem, Address, Motoboy } from '@shared/schema';
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '@shared/schema';
 
 interface OrderWithDetails extends Order {
@@ -35,6 +35,27 @@ export default function Motoboy() {
     queryKey: ['/api/orders', 'motoboy', user?.id],
     refetchInterval: 10000,
     enabled: !!user?.id,
+  });
+
+  const { data: motoboys = [] } = useQuery<Motoboy[]>({
+    queryKey: ['/api/motoboys'],
+  });
+
+  const currentMotoboy = motoboys.find(m => m.whatsapp === user?.whatsapp);
+
+  const assignMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest('PATCH', `/api/orders/${orderId}/assign`, { 
+        motoboyId: currentMotoboy?.id 
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      toast({ title: 'Entrega aceita com sucesso!' });
+    },
+    onError: () => {
+      toast({ title: 'Erro ao aceitar entrega', variant: 'destructive' });
+    },
   });
 
   const updateStatusMutation = useMutation({
@@ -246,6 +267,16 @@ export default function Motoboy() {
                               {formatPrice(order.total)}
                             </span>
                           </div>
+
+                          <Button
+                            className="w-full bg-green-600 text-white py-6 text-lg font-semibold"
+                            onClick={() => assignMutation.mutate(order.id)}
+                            disabled={assignMutation.isPending || !currentMotoboy}
+                            data-testid={`button-accept-delivery-${order.id}`}
+                          >
+                            <Truck className="h-5 w-5 mr-2" />
+                            Aceitar Entrega
+                          </Button>
                         </CardContent>
                       </Card>
                     );
