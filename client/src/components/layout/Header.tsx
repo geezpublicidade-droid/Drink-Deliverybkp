@@ -81,7 +81,7 @@ export function Header({ onCartOpen }: HeaderProps) {
               </Button>
             )}
 
-            <Link href="/admin/login" className="text-muted-foreground/50 hover:text-primary transition-colors">
+            <Link href="/admin-login" className="text-muted-foreground/50 hover:text-primary transition-colors">
               <Settings className="h-4 w-4" />
             </Link>
 
