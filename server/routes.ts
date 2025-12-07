@@ -69,6 +69,45 @@ export async function registerRoutes(
     res.json(user);
   });
 
+  app.post("/api/auth/check-phone", async (req, res) => {
+    const { whatsapp } = req.body;
+    const user = await storage.getUserByWhatsapp(whatsapp);
+    if (user) {
+      const addresses = await storage.getAddresses(user.id);
+      const defaultAddress = addresses.find(a => a.isDefault) || addresses[0];
+      res.json({ exists: true, user, address: defaultAddress || null });
+    } else {
+      res.json({ exists: false });
+    }
+  });
+
+  app.post("/api/auth/register", async (req, res) => {
+    const { user: userData, address: addressData } = req.body;
+    
+    const user = await storage.createUser({
+      name: userData.name,
+      whatsapp: userData.whatsapp,
+      role: "customer",
+      password: null,
+      isBlocked: false
+    });
+    
+    const address = await storage.createAddress({
+      userId: user.id,
+      street: addressData.street,
+      number: addressData.number,
+      complement: addressData.complement || null,
+      neighborhood: addressData.neighborhood,
+      city: addressData.city,
+      state: addressData.state,
+      zipCode: addressData.zipCode,
+      notes: addressData.notes || null,
+      isDefault: true
+    });
+    
+    res.json({ user, address });
+  });
+
   app.get("/api/addresses/:userId", async (req, res) => {
     const addresses = await storage.getAddresses(req.params.userId);
     res.json(addresses);
