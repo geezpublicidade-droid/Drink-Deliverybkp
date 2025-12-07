@@ -21,8 +21,21 @@ import {
   ChefHat,
   MapPin,
   ShoppingCart,
-  User as UserIcon
+  User as UserIcon,
+  Wine,
+  Beer,
+  Grape,
+  Snowflake,
+  Zap,
+  GlassWater,
+  Utensils,
+  Droplets,
+  ChevronLeft,
+  ChevronRight,
+  Calendar
 } from 'lucide-react';
+import { useRef} from 'react';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';

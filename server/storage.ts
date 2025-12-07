@@ -126,82 +126,140 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
     });
 
-    const cat1Id = randomUUID();
-    const cat2Id = randomUUID();
-    const cat3Id = randomUUID();
+    const catDestiladosId = randomUUID();
+    const catCervejasId = randomUUID();
+    const catVinhosId = randomUUID();
+    const catGelosId = randomUUID();
+    const catEnergeticosId = randomUUID();
+    const catMisturaId = randomUUID();
+    const catPetiscosId = randomUUID();
+    const catAguasId = randomUUID();
     
-    this.categories.set(cat1Id, {
-      id: cat1Id,
+    this.categories.set(catDestiladosId, {
+      id: catDestiladosId,
       name: "Destilados",
-      iconUrl: null,
+      iconUrl: "wine",
       sortOrder: 1,
       isActive: true,
       createdAt: new Date(),
     });
-    this.categories.set(cat2Id, {
-      id: cat2Id,
-      name: "Gelos",
-      iconUrl: null,
+    this.categories.set(catCervejasId, {
+      id: catCervejasId,
+      name: "Cervejas",
+      iconUrl: "beer",
       sortOrder: 2,
       isActive: true,
       createdAt: new Date(),
     });
-    this.categories.set(cat3Id, {
-      id: cat3Id,
-      name: "Energeticos",
-      iconUrl: null,
+    this.categories.set(catVinhosId, {
+      id: catVinhosId,
+      name: "Vinhos",
+      iconUrl: "grape",
       sortOrder: 3,
       isActive: true,
       createdAt: new Date(),
     });
-
-    const prod1Id = randomUUID();
-    const prod2Id = randomUUID();
-    const prod3Id = randomUUID();
-
-    this.products.set(prod1Id, {
-      id: prod1Id,
-      categoryId: cat1Id,
-      name: "Vodka Absolut 1L",
-      description: "Vodka premium sueca",
-      imageUrl: null,
-      costPrice: "45.00",
-      profitMargin: "50.00",
-      salePrice: "89.90",
-      stock: 20,
+    this.categories.set(catGelosId, {
+      id: catGelosId,
+      name: "Gelos",
+      iconUrl: "snowflake",
+      sortOrder: 4,
       isActive: true,
-      productType: "destilado",
+      createdAt: new Date(),
+    });
+    this.categories.set(catEnergeticosId, {
+      id: catEnergeticosId,
+      name: "Energeticos",
+      iconUrl: "zap",
+      sortOrder: 5,
+      isActive: true,
+      createdAt: new Date(),
+    });
+    this.categories.set(catMisturaId, {
+      id: catMisturaId,
+      name: "Misturas",
+      iconUrl: "glass-water",
+      sortOrder: 6,
+      isActive: true,
+      createdAt: new Date(),
+    });
+    this.categories.set(catPetiscosId, {
+      id: catPetiscosId,
+      name: "Petiscos",
+      iconUrl: "utensils",
+      sortOrder: 7,
+      isActive: true,
+      createdAt: new Date(),
+    });
+    this.categories.set(catAguasId, {
+      id: catAguasId,
+      name: "Aguas e Sucos",
+      iconUrl: "droplets",
+      sortOrder: 8,
+      isActive: true,
       createdAt: new Date(),
     });
 
-    this.products.set(prod2Id, {
-      id: prod2Id,
-      categoryId: cat2Id,
-      name: "Gelo Premium 2kg",
-      description: "Gelo cristalino de alta qualidade",
-      imageUrl: null,
-      costPrice: "3.00",
-      profitMargin: "100.00",
-      salePrice: "6.00",
-      stock: 100,
-      isActive: true,
-      productType: "gelo",
-      createdAt: new Date(),
-    });
+    const products = [
+      { categoryId: catDestiladosId, name: "Vodka Absolut 1L", description: "Vodka premium sueca, sabor puro e cristalino", costPrice: "45.00", profitMargin: "50.00", salePrice: "89.90", stock: 20, productType: "destilado" },
+      { categoryId: catDestiladosId, name: "Whisky Jack Daniels 1L", description: "Whisky americano Tennessee, envelhecido em barris de carvalho", costPrice: "85.00", profitMargin: "45.00", salePrice: "159.90", stock: 15, productType: "destilado" },
+      { categoryId: catDestiladosId, name: "Gin Tanqueray 750ml", description: "Gin britanico premium com notas citricas", costPrice: "55.00", profitMargin: "50.00", salePrice: "109.90", stock: 18, productType: "destilado" },
+      { categoryId: catDestiladosId, name: "Tequila Jose Cuervo 750ml", description: "Tequila mexicana gold, perfeita para drinks", costPrice: "48.00", profitMargin: "55.00", salePrice: "99.90", stock: 12, productType: "destilado" },
+      { categoryId: catDestiladosId, name: "Rum Bacardi Carta Branca 1L", description: "Rum caribenho leve e suave", costPrice: "35.00", profitMargin: "50.00", salePrice: "69.90", stock: 25, productType: "destilado" },
+      { categoryId: catDestiladosId, name: "Cachaça 51 1L", description: "Cachaca tradicional brasileira", costPrice: "12.00", profitMargin: "80.00", salePrice: "29.90", stock: 40, productType: "destilado" },
+      { categoryId: catDestiladosId, name: "Vodka Smirnoff 1L", description: "Vodka russa classica, tripla destilacao", costPrice: "28.00", profitMargin: "60.00", salePrice: "59.90", stock: 30, productType: "destilado" },
+      { categoryId: catDestiladosId, name: "Whisky Red Label 1L", description: "Whisky escoces blend, sabor intenso", costPrice: "70.00", profitMargin: "45.00", salePrice: "129.90", stock: 20, productType: "destilado" },
+      
+      { categoryId: catCervejasId, name: "Heineken Long Neck 330ml", description: "Cerveja holandesa premium lager", costPrice: "3.50", profitMargin: "70.00", salePrice: "7.90", stock: 120, productType: null },
+      { categoryId: catCervejasId, name: "Budweiser Long Neck 330ml", description: "Cerveja americana lager refrescante", costPrice: "3.00", profitMargin: "70.00", salePrice: "6.90", stock: 100, productType: null },
+      { categoryId: catCervejasId, name: "Corona Extra 330ml", description: "Cerveja mexicana premium com toque citrico", costPrice: "4.00", profitMargin: "65.00", salePrice: "8.90", stock: 80, productType: null },
+      { categoryId: catCervejasId, name: "Stella Artois 550ml", description: "Cerveja belga premium lager", costPrice: "5.00", profitMargin: "60.00", salePrice: "9.90", stock: 60, productType: null },
+      { categoryId: catCervejasId, name: "Brahma Lata 350ml", description: "Cerveja brasileira tradicional", costPrice: "2.00", profitMargin: "80.00", salePrice: "4.90", stock: 200, productType: null },
+      { categoryId: catCervejasId, name: "Skol Lata 350ml", description: "Cerveja brasileira leve e refrescante", costPrice: "2.00", profitMargin: "75.00", salePrice: "4.50", stock: 200, productType: null },
+      
+      { categoryId: catVinhosId, name: "Vinho Casillero del Diablo 750ml", description: "Vinho tinto chileno Cabernet Sauvignon", costPrice: "35.00", profitMargin: "50.00", salePrice: "69.90", stock: 20, productType: null },
+      { categoryId: catVinhosId, name: "Vinho Miolo Seival 750ml", description: "Vinho brasileiro tannat de alta qualidade", costPrice: "40.00", profitMargin: "50.00", salePrice: "79.90", stock: 15, productType: null },
+      { categoryId: catVinhosId, name: "Espumante Chandon 750ml", description: "Espumante argentino brut elegante", costPrice: "50.00", profitMargin: "55.00", salePrice: "99.90", stock: 12, productType: null },
+      
+      { categoryId: catGelosId, name: "Gelo Premium 2kg", description: "Gelo cristalino de alta qualidade, cubos perfeitos", costPrice: "3.00", profitMargin: "100.00", salePrice: "8.00", stock: 150, productType: "gelo" },
+      { categoryId: catGelosId, name: "Gelo Triturado 2kg", description: "Gelo triturado ideal para caipirinhas e drinks", costPrice: "4.00", profitMargin: "90.00", salePrice: "10.00", stock: 100, productType: "gelo" },
+      { categoryId: catGelosId, name: "Gelo Bola 1kg", description: "Gelo em formato de bola para whisky e drinks especiais", costPrice: "8.00", profitMargin: "80.00", salePrice: "18.00", stock: 50, productType: "gelo" },
+      
+      { categoryId: catEnergeticosId, name: "Red Bull 250ml", description: "Energetico classico com taurina e cafeina", costPrice: "5.00", profitMargin: "60.00", salePrice: "9.90", stock: 80, productType: "energetico" },
+      { categoryId: catEnergeticosId, name: "Monster Energy 473ml", description: "Energetico potente sabor original", costPrice: "6.00", profitMargin: "55.00", salePrice: "11.90", stock: 60, productType: "energetico" },
+      { categoryId: catEnergeticosId, name: "Red Bull Tropical 250ml", description: "Energetico sabor frutas tropicais", costPrice: "5.50", profitMargin: "55.00", salePrice: "10.90", stock: 50, productType: "energetico" },
+      { categoryId: catEnergeticosId, name: "Monster Ultra 473ml", description: "Energetico zero acucar sabor citrus", costPrice: "6.50", profitMargin: "50.00", salePrice: "12.90", stock: 40, productType: "energetico" },
+      
+      { categoryId: catMisturaId, name: "Agua Tonica Schweppes 350ml", description: "Agua tonica original para gin tonica perfeito", costPrice: "2.50", profitMargin: "80.00", salePrice: "5.90", stock: 100, productType: null },
+      { categoryId: catMisturaId, name: "Refrigerante Cola 350ml", description: "Refrigerante cola para drinks e consumo", costPrice: "2.00", profitMargin: "80.00", salePrice: "4.90", stock: 120, productType: null },
+      { categoryId: catMisturaId, name: "Suco de Limao 500ml", description: "Suco natural de limao para caipirinhas", costPrice: "4.00", profitMargin: "70.00", salePrice: "8.90", stock: 40, productType: null },
+      { categoryId: catMisturaId, name: "Agua de Coco 1L", description: "Agua de coco natural refrescante", costPrice: "5.00", profitMargin: "60.00", salePrice: "9.90", stock: 50, productType: null },
+      
+      { categoryId: catPetiscosId, name: "Amendoim Japonês 200g", description: "Amendoim crocante revestido", costPrice: "4.00", profitMargin: "75.00", salePrice: "8.90", stock: 60, productType: null },
+      { categoryId: catPetiscosId, name: "Batata Chips 100g", description: "Batata chips crocante sabor original", costPrice: "3.00", profitMargin: "80.00", salePrice: "6.90", stock: 80, productType: null },
+      { categoryId: catPetiscosId, name: "Salaminho 200g", description: "Salaminho fatiado para petisco", costPrice: "8.00", profitMargin: "60.00", salePrice: "15.90", stock: 30, productType: null },
+      
+      { categoryId: catAguasId, name: "Agua Mineral 500ml", description: "Agua mineral sem gas", costPrice: "1.00", profitMargin: "100.00", salePrice: "3.00", stock: 200, productType: null },
+      { categoryId: catAguasId, name: "Agua com Gas 500ml", description: "Agua mineral com gas", costPrice: "1.50", profitMargin: "90.00", salePrice: "3.90", stock: 150, productType: null },
+      { categoryId: catAguasId, name: "Suco Natural Laranja 300ml", description: "Suco de laranja natural gelado", costPrice: "4.00", profitMargin: "65.00", salePrice: "8.90", stock: 40, productType: null },
+    ];
 
-    this.products.set(prod3Id, {
-      id: prod3Id,
-      categoryId: cat3Id,
-      name: "Red Bull 250ml",
-      description: "Energetico classico",
-      imageUrl: null,
-      costPrice: "5.00",
-      profitMargin: "60.00",
-      salePrice: "9.90",
-      stock: 50,
-      isActive: true,
-      productType: "energetico",
-      createdAt: new Date(),
+    products.forEach(prod => {
+      const prodId = randomUUID();
+      this.products.set(prodId, {
+        id: prodId,
+        categoryId: prod.categoryId,
+        name: prod.name,
+        description: prod.description,
+        imageUrl: null,
+        costPrice: prod.costPrice,
+        profitMargin: prod.profitMargin,
+        salePrice: prod.salePrice,
+        stock: prod.stock,
+        isActive: true,
+        productType: prod.productType,
+        createdAt: new Date(),
+      });
     });
 
     this.settings = {
