@@ -5,6 +5,21 @@ import bcrypt from "bcrypt";
 
 const SALT_ROUNDS = 10;
 
+const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
+  pending: ['accepted', 'cancelled'],
+  accepted: ['preparing', 'cancelled'],
+  preparing: ['ready', 'cancelled'],
+  ready: ['dispatched', 'cancelled'],
+  dispatched: ['delivered', 'cancelled'],
+  delivered: [],
+  cancelled: []
+};
+
+function isValidStatusTransition(currentStatus: string, newStatus: string): boolean {
+  const allowed = VALID_STATUS_TRANSITIONS[currentStatus];
+  return allowed ? allowed.includes(newStatus) : false;
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -283,6 +298,14 @@ export async function registerRoutes(
     const order = await storage.getOrder(req.params.id);
     if (!order) return res.status(404).json({ error: "Order not found" });
 
+    if (!isValidStatusTransition(order.status, status)) {
+      return res.status(400).json({ 
+        error: `Transicao invalida: ${order.status} -> ${status}`,
+        currentStatus: order.status,
+        allowedTransitions: VALID_STATUS_TRANSITIONS[order.status] || []
+      });
+    }
+
     const updates: Partial<typeof order> = { status };
     const now = new Date();
 
@@ -312,6 +335,12 @@ export async function registerRoutes(
     const { motoboyId } = req.body;
     const order = await storage.getOrder(req.params.id);
     if (!order) return res.status(404).json({ error: "Order not found" });
+
+    if (order.status !== 'ready') {
+      return res.status(400).json({ 
+        error: `Pedido deve estar com status 'pronto' para atribuir motoboy. Status atual: ${order.status}` 
+      });
+    }
 
     const updated = await storage.updateOrder(req.params.id, { 
       motoboyId, 
