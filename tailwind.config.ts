@@ -81,11 +81,21 @@ export default {
           busy: "rgb(239 68 68)",
           offline: "rgb(156 163 175)",
         },
+        gold: {
+          DEFAULT: "hsl(45 100% 50% / <alpha-value>)",
+          dark: "hsl(45 100% 40% / <alpha-value>)",
+          light: "hsl(45 100% 60% / <alpha-value>)",
+        },
+        yellow: {
+          DEFAULT: "hsl(42 100% 47% / <alpha-value>)",
+          dark: "hsl(42 100% 37% / <alpha-value>)",
+          light: "hsl(42 100% 57% / <alpha-value>)",
+        },
       },
       fontFamily: {
-        sans: ["var(--font-sans)"],
-        serif: ["var(--font-serif)"],
-        mono: ["var(--font-mono)"],
+        sans: ["var(--font-sans)", "Inter", "sans-serif"],
+        serif: ["var(--font-serif)", "Playfair Display", "serif"],
+        mono: ["var(--font-mono)", "JetBrains Mono", "monospace"],
       },
       keyframes: {
         "accordion-down": {
