@@ -64,6 +64,20 @@ const tabs = [
   { id: 'configuracoes', label: 'Configuracoes', icon: Settings },
 ];
 
+function getCategoryIcon(iconUrl: string | null) {
+  switch (iconUrl) {
+    case 'wine': return Wine;
+    case 'beer': return Beer;
+    case 'grape': return Grape;
+    case 'snowflake': return Snowflake;
+    case 'zap': return Zap;
+    case 'glass-water': return GlassWater;
+    case 'utensils': return Utensils;
+    case 'droplets': return Droplets;
+    default: return Grid3X3;
+  }
+}
+
 function formatCurrency(value: number | string): string {
   const num = typeof value === 'string' ? parseFloat(value) : value;
   return new Intl.NumberFormat('pt-BR', {
@@ -761,41 +775,82 @@ function ProdutosTab() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {products.map(product => (
-          <Card key={product.id} data-testid={`card-product-${product.id}`}>
-            <CardContent className="p-4">
-              {product.imageUrl && (
-                <img src={product.imageUrl} alt={product.name} className="w-full h-32 object-contain mb-3 rounded-lg bg-white/10" />
-              )}
-              <h3 className="font-semibold">{product.name}</h3>
-              <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
-              <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
-                <span className="text-lg font-bold text-primary">{formatCurrency(product.salePrice)}</span>
-                <Badge className={product.isActive ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}>
-                  {product.isActive ? 'Ativo' : 'Inativo'}
-                </Badge>
-              </div>
-              <div className="flex gap-2 mt-3">
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={() => { setEditingProduct(product); setIsDialogOpen(true); }}
-                  data-testid={`button-edit-product-${product.id}`}
-                >
-                  <Edit2 className="w-4 h-4" />
-                </Button>
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  onClick={() => deleteMutation.mutate(product.id)}
-                  data-testid={`button-delete-product-${product.id}`}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        {products.map(product => {
+          const category = categories.find(c => c.id === product.categoryId);
+          return (
+            <Card key={product.id} data-testid={`card-product-${product.id}`}>
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  {product.imageUrl ? (
+                    <img src={product.imageUrl} alt={product.name} className="w-16 h-16 object-contain rounded-lg bg-white/10 flex-shrink-0" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
+                      <ShoppingBag className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold truncate">{product.name}</h3>
+                    {category && (
+                      <p className="text-xs text-muted-foreground">{category.name}</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      <Badge className={product.isActive ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}>
+                        {product.isActive ? 'Ativo' : 'Inativo'}
+                      </Badge>
+                      {product.productType && (
+                        <Badge className="bg-primary/20 text-primary">
+                          {product.productType}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2 mt-4 text-sm">
+                  <div className="bg-secondary/50 rounded-md p-2">
+                    <span className="text-muted-foreground text-xs block">Custo</span>
+                    <span className="font-medium">{formatCurrency(product.costPrice)}</span>
+                  </div>
+                  <div className="bg-secondary/50 rounded-md p-2">
+                    <span className="text-muted-foreground text-xs block">Venda</span>
+                    <span className="font-bold text-primary">{formatCurrency(product.salePrice)}</span>
+                  </div>
+                  <div className="bg-secondary/50 rounded-md p-2">
+                    <span className="text-muted-foreground text-xs block">Margem</span>
+                    <span className="font-medium">{product.profitMargin}%</span>
+                  </div>
+                  <div className="bg-secondary/50 rounded-md p-2">
+                    <span className="text-muted-foreground text-xs block">Estoque</span>
+                    <span className={`font-medium ${product.stock <= 5 ? 'text-destructive' : product.stock <= 15 ? 'text-primary' : 'text-foreground'}`}>
+                      {product.stock} un
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 mt-4">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="flex-1"
+                    onClick={() => { setEditingProduct(product); setIsDialogOpen(true); }}
+                    data-testid={`button-edit-product-${product.id}`}
+                  >
+                    <Edit2 className="w-4 h-4 mr-1" />
+                    Editar
+                  </Button>
+                  <Button 
+                    size="icon" 
+                    variant="ghost"
+                    onClick={() => deleteMutation.mutate(product.id)}
+                    data-testid={`button-delete-product-${product.id}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
@@ -900,9 +955,14 @@ function CategoriasTab() {
         {categories.map(category => (
           <Card key={category.id} data-testid={`card-category-${category.id}`}>
             <CardContent className="p-4 flex items-center gap-4">
-              {category.iconUrl && (
-                <img src={category.iconUrl} alt={category.name} className="w-12 h-12 object-contain rounded-full bg-white/10" />
-              )}
+              {(() => {
+                const IconComponent = getCategoryIcon(category.iconUrl);
+                return (
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                    <IconComponent className="w-6 h-6 text-primary" />
+                  </div>
+                );
+              })()}
               <div className="flex-1">
                 <h3 className="font-semibold">{category.name}</h3>
                 <p className="text-sm text-muted-foreground">Ordem: {category.sortOrder}</p>
@@ -1333,11 +1393,22 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('pedidos');
   const { user, role, logout } = useAuth();
   const [, setLocation] = useLocation();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   if (role !== 'admin') {
     setLocation('/admin-login');
     return null;
   }
+
+  const scrollTabs = (direction: 'left' | 'right') => {
+    if (scrollContainerRef.current) {
+      const scrollAmount = 200;
+      scrollContainerRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+  };
 
   const renderTab = () => {
     switch (activeTab) {
@@ -1356,59 +1427,27 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
-      <aside className="w-64 bg-sidebar border-r border-sidebar-border hidden lg:block">
-        <div className="p-6">
-          <h1 className="font-serif text-2xl text-primary">VIBE DRINKS</h1>
-          <p className="text-sm text-muted-foreground mt-1">Painel Admin</p>
+    <div className="min-h-screen bg-background flex flex-col">
+      <header className="sticky top-0 z-50 bg-background border-b border-border">
+        <div className="flex items-center justify-between gap-4 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <h1 className="font-serif text-xl text-primary whitespace-nowrap">VIBE DRINKS</h1>
+            <Badge className="bg-primary/20 text-primary hidden sm:inline-flex">Admin</Badge>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground hidden sm:inline">{user?.name}</span>
+            <Button 
+              size="sm"
+              variant="ghost" 
+              onClick={() => { logout(); setLocation('/'); }}
+              data-testid="button-logout"
+            >
+              <LogOut className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
         
-        <nav className="px-3 space-y-1">
-          {tabs.map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-                  isActive 
-                    ? 'bg-sidebar-accent text-sidebar-accent-foreground' 
-                    : 'text-sidebar-foreground hover-elevate'
-                }`}
-                data-testid={`tab-${tab.id}`}
-              >
-                <Icon className={`w-5 h-5 ${isActive ? 'text-primary' : ''}`} />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="absolute bottom-0 left-0 w-64 p-4 border-t border-sidebar-border">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-              <Users className="w-5 h-5 text-primary" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-medium truncate">{user?.name}</p>
-              <p className="text-xs text-muted-foreground">Administrador</p>
-            </div>
-          </div>
-          <Button 
-            variant="outline" 
-            className="w-full" 
-            onClick={() => { logout(); setLocation('/'); }}
-            data-testid="button-logout"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            Sair
-          </Button>
-        </div>
-      </aside>
-
-      <main className="flex-1 p-6 lg:p-8 overflow-auto">
-        <div className="lg:hidden mb-6">
+        <div className="md:hidden px-4 pb-3">
           <Select value={activeTab} onValueChange={setActiveTab}>
             <SelectTrigger className="w-full bg-secondary" data-testid="select-mobile-tab">
               <SelectValue />
@@ -1421,6 +1460,56 @@ export default function AdminDashboard() {
           </Select>
         </div>
 
+        <div className="relative items-center hidden md:flex">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="absolute left-0 z-10"
+            onClick={() => scrollTabs('left')}
+            data-testid="button-scroll-left"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          
+          <div 
+            ref={scrollContainerRef}
+            className="flex overflow-x-auto px-10 gap-1 py-2"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {tabs.map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-colors flex-shrink-0 ${
+                    isActive 
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'text-muted-foreground hover-elevate'
+                  }`}
+                  data-testid={`tab-${tab.id}`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span className="text-sm font-medium">{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          
+          <Button
+            size="icon"
+            variant="ghost"
+            className="absolute right-0 z-10"
+            onClick={() => scrollTabs('right')}
+            data-testid="button-scroll-right"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+      </header>
+
+      <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
         {renderTab()}
       </main>
     </div>
