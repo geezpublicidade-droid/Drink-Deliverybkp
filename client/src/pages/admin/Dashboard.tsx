@@ -1957,7 +1957,6 @@ function MotoboysTab() {
     const data: Partial<Motoboy> & { password?: string } = {
       name: formData.get('name') as string,
       whatsapp: formData.get('whatsapp') as string,
-      photoUrl: formData.get('photoUrl') as string || null,
       isActive: formData.get('isActive') === 'on',
     };
     
@@ -2092,15 +2091,6 @@ function MotoboysTab() {
                 <p className="text-xs text-muted-foreground mt-1">
                   A senha e usada para o motoboy acessar o app
                 </p>
-              </div>
-              <div>
-                <Label htmlFor="photoUrl">URL da Foto (opcional)</Label>
-                <Input 
-                  id="photoUrl" 
-                  name="photoUrl" 
-                  defaultValue={editingMotoboy?.photoUrl || ''} 
-                  data-testid="input-motoboy-photo" 
-                />
               </div>
               <div className="flex items-center gap-3">
                 <Switch 
