@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react';
 interface OrderWithItems extends Order {
   items: OrderItem[];
   userName?: string;
+  userWhatsapp?: string;
 }
 
 export default function Kitchen() {
@@ -40,6 +41,10 @@ export default function Kitchen() {
     refetchInterval: isSSEConnected ? 30000 : 5000,
   });
 
+  const { data: users = [] } = useQuery<{ id: string; name: string; whatsapp: string }[]>({
+    queryKey: ['/api/users'],
+  });
+
   const orderIds = orders.map(o => o.id).join(',');
   
   const { data: orderItems = [] } = useQuery<OrderItem[]>({
@@ -54,10 +59,15 @@ export default function Kitchen() {
     refetchInterval: isSSEConnected ? 30000 : 5000,
   });
 
-  const ordersWithItems: OrderWithItems[] = orders.map(order => ({
-    ...order,
-    items: orderItems.filter(item => item.orderId === order.id),
-  }));
+  const ordersWithItems: OrderWithItems[] = orders.map(order => {
+    const user = users.find(u => u.id === order.userId);
+    return {
+      ...order,
+      items: orderItems.filter(item => item.orderId === order.id),
+      userName: user?.name,
+      userWhatsapp: user?.whatsapp,
+    };
+  });
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: OrderStatus }) => {
