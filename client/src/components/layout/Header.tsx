@@ -108,13 +108,31 @@ export function Header({ onCartOpen }: HeaderProps) {
                     Sobre
                   </Link>
                   {isAuthenticated && (
-                    <Button 
-                      variant="ghost" 
-                      className="justify-start text-destructive"
-                      onClick={() => { logout(); setMobileMenuOpen(false); }}
-                    >
-                      Sair
-                    </Button>
+                    <>
+                      <Link 
+                        href="/perfil" 
+                        className="text-white text-lg font-medium"
+                        onClick={() => setMobileMenuOpen(false)}
+                        data-testid="link-profile-mobile"
+                      >
+                        Meu Perfil
+                      </Link>
+                      <Link 
+                        href="/pedidos" 
+                        className="text-white text-lg font-medium"
+                        onClick={() => setMobileMenuOpen(false)}
+                        data-testid="link-orders-mobile"
+                      >
+                        Meus Pedidos
+                      </Link>
+                      <Button 
+                        variant="ghost" 
+                        className="justify-start text-destructive"
+                        onClick={() => { logout(); setMobileMenuOpen(false); }}
+                      >
+                        Sair
+                      </Button>
+                    </>
                   )}
                 </div>
               </SheetContent>

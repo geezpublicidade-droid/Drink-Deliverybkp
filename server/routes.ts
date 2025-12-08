@@ -193,6 +193,19 @@ export async function registerRoutes(
   });
 
   app.patch("/api/addresses/:id", async (req, res) => {
+    const existingAddress = await storage.getAddress(req.params.id);
+    if (!existingAddress) return res.status(404).json({ error: "Address not found" });
+    
+    // If setting this address as default, clear the default from other addresses
+    if (req.body.isDefault === true && existingAddress.userId) {
+      const userAddresses = await storage.getAddresses(existingAddress.userId);
+      for (const addr of userAddresses) {
+        if (addr.id !== req.params.id && addr.isDefault) {
+          await storage.updateAddress(addr.id, { isDefault: false });
+        }
+      }
+    }
+    
     const address = await storage.updateAddress(req.params.id, req.body);
     if (!address) return res.status(404).json({ error: "Address not found" });
     res.json(address);

@@ -15,6 +15,7 @@ import Kitchen from "@/pages/Kitchen";
 import Motoboy from "@/pages/Motoboy";
 import PDV from "@/pages/PDV";
 import AdminDashboard from "@/pages/admin/Dashboard";
+import Profile from "@/pages/Profile";
 
 function Router() {
   return (
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/admin-login" component={AdminLogin} />
       <Route path="/checkout" component={Checkout} />
       <Route path="/pedidos" component={Orders} />
+      <Route path="/perfil" component={Profile} />
       <Route path="/cozinha" component={Kitchen} />
       <Route path="/motoboy" component={Motoboy} />
       <Route path="/pdv" component={PDV} />
