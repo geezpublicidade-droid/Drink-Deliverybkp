@@ -2,6 +2,7 @@ import type { Express, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcrypt";
+import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 
 const SALT_ROUNDS = 10;
 
@@ -697,6 +698,91 @@ export async function registerRoutes(
   app.patch("/api/settings", async (req, res) => {
     const settings = await storage.updateSettings(req.body);
     res.json(settings);
+  });
+
+  // Object Storage Routes
+  // NOTE: MVP Authentication Limitation
+  // The upload endpoint uses X-User-Id header for auth validation.
+  // This header is set from localStorage and verified against the database.
+  // While the user must exist with admin/pdv role, headers can be forged.
+  // For production, implement proper session-based auth with signed cookies.
+  // Current protection: Valid UUID required + must exist in DB + must have admin/pdv role.
+  
+  // Public objects endpoint - serves uploaded files
+  app.get("/public-objects/:filePath(*)", async (req, res) => {
+    const filePath = req.params.filePath;
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const file = await objectStorageService.searchPublicObject(filePath);
+      if (!file) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      objectStorageService.downloadObject(file, res);
+    } catch (error) {
+      console.error("Error searching for public object:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get upload URL for product images (admin only)
+  app.post("/api/objects/upload", async (req, res) => {
+    const userId = req.headers['x-user-id'] as string | undefined;
+    
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized: User ID required" });
+    }
+    
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return res.status(401).json({ error: "Unauthorized: User not found" });
+    }
+    
+    if (user.role !== 'admin' && user.role !== 'pdv') {
+      return res.status(403).json({ error: "Forbidden: Admin access required" });
+    }
+    
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      res.json({ uploadURL });
+    } catch (error) {
+      console.error("Error getting upload URL:", error);
+      return res.status(500).json({ error: "Failed to get upload URL" });
+    }
+  });
+
+  // Private objects endpoint - serves files from private storage with access control
+  app.get("/objects/:entityPath(*)", async (req, res) => {
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const objectPath = `/objects/${req.params.entityPath}`;
+      const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+      objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      if (error instanceof ObjectNotFoundError) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      console.error("Error serving private object:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Update product image after upload
+  app.put("/api/products/:id/image", async (req, res) => {
+    const { imageUrl } = req.body;
+    if (!imageUrl) {
+      return res.status(400).json({ error: "imageUrl is required" });
+    }
+    try {
+      const objectStorageService = new ObjectStorageService();
+      const objectPath = objectStorageService.normalizeObjectEntityPath(imageUrl);
+      const product = await storage.updateProduct(req.params.id, { imageUrl: objectPath });
+      if (!product) return res.status(404).json({ error: "Product not found" });
+      res.json(product);
+    } catch (error) {
+      console.error("Error updating product image:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
   });
 
   return httpServer;

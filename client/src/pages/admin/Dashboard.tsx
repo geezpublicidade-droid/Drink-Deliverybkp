@@ -55,6 +55,7 @@ import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { useOrderUpdates } from '@/hooks/use-order-updates';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { ProductImageUploader } from '@/components/ProductImageUploader';
 import type { Order, Product, Category, Motoboy, User, Settings as SettingsType } from '@shared/schema';
 import { ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS, ORDER_TYPE_LABELS, type OrderStatus, type PaymentMethod, type OrderType } from '@shared/schema';
 
@@ -984,7 +985,22 @@ function ClientesTab() {
 function ProdutosTab() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const handleOpenDialog = (product: Product | null) => {
+    setEditingProduct(product);
+    setUploadedImageUrl(product?.imageUrl || null);
+    setIsDialogOpen(true);
+  };
+
+  const handleCloseDialog = (open: boolean) => {
+    if (!open) {
+      setEditingProduct(null);
+      setUploadedImageUrl(null);
+    }
+    setIsDialogOpen(open);
+  };
 
   const { data: products = [] } = useQuery<Product[]>({
     queryKey: ['/api/products'],
@@ -1038,7 +1054,7 @@ function ProdutosTab() {
       profitMargin: formData.get('profitMargin') as string,
       salePrice: formData.get('salePrice') as string,
       stock: parseInt(formData.get('stock') as string) || 0,
-      imageUrl: formData.get('imageUrl') as string,
+      imageUrl: uploadedImageUrl || editingProduct?.imageUrl || null,
       productType: formData.get('productType') as string || null,
       isActive: true,
     };
@@ -1048,15 +1064,16 @@ function ProdutosTab() {
     } else {
       createMutation.mutate(data);
     }
+    setUploadedImageUrl(null);
   };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h2 className="font-serif text-3xl text-primary">Produtos</h2>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
           <DialogTrigger asChild>
-            <Button onClick={() => setEditingProduct(null)} data-testid="button-add-product">
+            <Button onClick={() => handleOpenDialog(null)} data-testid="button-add-product">
               <Plus className="w-4 h-4 mr-2" />
               Novo Produto
             </Button>
@@ -1106,8 +1123,12 @@ function ProdutosTab() {
                 <Input id="stock" name="stock" type="number" defaultValue={editingProduct?.stock || 0} data-testid="input-product-stock" />
               </div>
               <div>
-                <Label htmlFor="imageUrl">URL da Imagem</Label>
-                <Input id="imageUrl" name="imageUrl" defaultValue={editingProduct?.imageUrl || ''} data-testid="input-product-image" />
+                <Label>Imagem do Produto</Label>
+                <ProductImageUploader
+                  currentImageUrl={uploadedImageUrl || editingProduct?.imageUrl}
+                  onImageUploaded={(url) => setUploadedImageUrl(url)}
+                  onImageRemoved={() => setUploadedImageUrl(null)}
+                />
               </div>
               <div>
                 <Label htmlFor="productType">Tipo (para combo)</Label>
@@ -1188,7 +1209,7 @@ function ProdutosTab() {
                     size="sm" 
                     variant="outline" 
                     className="flex-1"
-                    onClick={() => { setEditingProduct(product); setIsDialogOpen(true); }}
+                    onClick={() => handleOpenDialog(product)}
                     data-testid={`button-edit-product-${product.id}`}
                   >
                     <Edit2 className="w-4 h-4 mr-1" />
