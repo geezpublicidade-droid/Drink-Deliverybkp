@@ -4,9 +4,6 @@ import { randomUUID } from 'crypto';
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-console.log('[Supabase] Initializing with URL:', supabaseUrl ? 'SET' : 'NOT SET');
-console.log('[Supabase] Service key length:', supabaseServiceKey.length);
-
 export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
     autoRefreshToken: false,

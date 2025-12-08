@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcrypt";
 import multer from "multer";
-import { uploadFile, getStorageUrl } from "./supabase";
+import { uploadFile, deleteFile, getStorageUrl } from "./supabase";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -807,8 +807,23 @@ export async function registerRoutes(
 
   // Supabase Storage Routes
   // Direct file upload endpoint using server-side Supabase service role
+  // Requires admin or pdv role for security
   app.post("/api/storage/upload", upload.single('file'), async (req, res) => {
+    const userId = req.headers['x-user-id'] as string | undefined;
     const { folder = 'products' } = req.body;
+    
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized: User ID required" });
+    }
+    
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return res.status(401).json({ error: "Unauthorized: User not found" });
+    }
+    
+    if (user.role !== 'admin' && user.role !== 'pdv') {
+      return res.status(403).json({ error: "Forbidden: Admin access required" });
+    }
     
     if (!req.file) {
       return res.status(400).json({ error: "No file provided" });
@@ -825,6 +840,33 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error uploading file:", error);
       return res.status(500).json({ error: "Failed to upload file" });
+    }
+  });
+
+  // Delete file from storage (requires admin role)
+  app.delete("/api/storage/delete", async (req, res) => {
+    const userId = req.headers['x-user-id'] as string | undefined;
+    const { path } = req.body;
+    
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized: User ID required" });
+    }
+    
+    const user = await storage.getUser(userId);
+    if (!user || (user.role !== 'admin' && user.role !== 'pdv')) {
+      return res.status(403).json({ error: "Forbidden: Admin access required" });
+    }
+    
+    if (!path) {
+      return res.status(400).json({ error: "Path is required" });
+    }
+    
+    try {
+      await deleteFile(path);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting file:", error);
+      return res.status(500).json({ error: "Failed to delete file" });
     }
   });
 
