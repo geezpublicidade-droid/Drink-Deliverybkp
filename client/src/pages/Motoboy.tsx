@@ -48,24 +48,32 @@ export default function Motoboy() {
     },
   });
 
-  const { data: orders = [], isLoading, refetch } = useQuery<OrderWithDetails[]>({
-    queryKey: ['/api/orders'],
-    refetchInterval: isSSEConnected ? 30000 : 5000,
-    enabled: !!user?.id,
-  });
-
+  // First get motoboys to find current motoboy
   const { data: motoboys = [], isLoading: motoboyLoading } = useQuery<Motoboy[]>({
     queryKey: ['/api/motoboys'],
   });
 
   const currentMotoboy = motoboys.find(m => m.whatsapp === user?.whatsapp);
 
+  // Fetch only orders assigned to this motoboy (server-side filtering)
+  const { data: dispatchedOrders = [], isLoading, refetch } = useQuery<OrderWithDetails[]>({
+    queryKey: ['/api/motoboy', currentMotoboy?.id, 'orders'],
+    queryFn: async () => {
+      if (!currentMotoboy?.id) return [];
+      const res = await fetch(`/api/motoboy/${currentMotoboy.id}/orders`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    refetchInterval: isSSEConnected ? 30000 : 5000,
+    enabled: !!currentMotoboy?.id,
+  });
+
   const updateStatusMutation = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
       return apiRequest('PATCH', `/api/orders/${orderId}/status`, { status });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/motoboy', currentMotoboy?.id, 'orders'] });
       toast({ title: 'Entrega confirmada!' });
     },
     onError: () => {
@@ -100,13 +108,6 @@ export default function Motoboy() {
     setLocation('/admin-login');
     return null;
   }
-
-  // Mostrar apenas pedidos despachados atribuídos a este motoboy
-  const dispatchedOrders = orders.filter(o => 
-    o.status === 'dispatched' && 
-    currentMotoboy && 
-    o.motoboyId === currentMotoboy.id
-  );
 
   return (
     <div className="min-h-screen bg-background">

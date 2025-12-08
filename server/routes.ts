@@ -436,6 +436,25 @@ export async function registerRoutes(
     res.json(orders);
   });
 
+  // Secure endpoint for motoboy - returns only orders assigned to them
+  app.get("/api/motoboy/:motoboyId/orders", async (req, res) => {
+    const { motoboyId } = req.params;
+    
+    // Verify motoboy exists
+    const motoboy = await storage.getMotoboy(motoboyId);
+    if (!motoboy) {
+      return res.status(404).json({ error: "Motoboy not found" });
+    }
+    
+    // Get all orders and filter by motoboyId
+    const allOrders = await storage.getOrders();
+    const motoboyOrders = allOrders.filter(order => 
+      order.motoboyId === motoboyId && order.status === 'dispatched'
+    );
+    
+    res.json(motoboyOrders);
+  });
+
   app.post("/api/orders", async (req, res) => {
     const order = await storage.createOrder(req.body);
     
