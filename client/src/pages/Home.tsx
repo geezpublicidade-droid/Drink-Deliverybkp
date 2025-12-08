@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
+import { useAuth } from '@/lib/auth';
 import { Header } from '@/components/layout/Header';
 import { HeroSection } from '@/components/home/HeroSection';
 import { BannerCarousel } from '@/components/home/BannerCarousel';
@@ -16,8 +18,23 @@ type TrendingProductResponse = {
 };
 
 export default function Home() {
+  const [, setLocation] = useLocation();
+  const { role } = useAuth();
   const [cartOpen, setCartOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  useEffect(() => {
+    const privilegedRoles = ['admin', 'kitchen', 'pdv', 'motoboy'];
+    if (role && privilegedRoles.includes(role)) {
+      const redirectMap: Record<string, string> = {
+        admin: '/admin',
+        kitchen: '/cozinha',
+        pdv: '/pdv',
+        motoboy: '/motoboy',
+      };
+      setLocation(redirectMap[role]);
+    }
+  }, []);
 
   const { data: products = [], isLoading: productsLoading } = useQuery<Product[]>({
     queryKey: ['/api/products'],
