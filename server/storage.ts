@@ -5,6 +5,7 @@ import {
   users, addresses, categories, products, orders, orderItems, 
   banners, motoboys, stockLogs, settings
 } from "@shared/schema";
+import bcrypt from "bcrypt";
 import type { 
   User, InsertUser, 
   Address, InsertAddress,
@@ -376,6 +377,8 @@ export class DatabaseStorage implements IStorage {
 
 export const storage = new DatabaseStorage();
 
+const SALT_ROUNDS = 10;
+
 export async function seedDatabase() {
   const existingUsers = await db.select().from(users);
   if (existingUsers.length > 0) {
@@ -389,10 +392,12 @@ export async function seedDatabase() {
   const kitchenId = randomUUID();
   const pdvId = randomUUID();
 
+  const hashedPassword = await bcrypt.hash("939393", SALT_ROUNDS);
+
   await db.insert(users).values([
-    { id: adminId, name: "Admin", whatsapp: "00000000000", role: "admin", password: "939393", isBlocked: false },
-    { id: kitchenId, name: "Cozinha", whatsapp: "00000000001", role: "kitchen", password: "939393", isBlocked: false },
-    { id: pdvId, name: "Balcao", whatsapp: "00000000002", role: "pdv", password: "939393", isBlocked: false },
+    { id: adminId, name: "Admin", whatsapp: "00000000000", role: "admin", password: hashedPassword, isBlocked: false },
+    { id: kitchenId, name: "Cozinha", whatsapp: "00000000001", role: "kitchen", password: hashedPassword, isBlocked: false },
+    { id: pdvId, name: "Balcao", whatsapp: "00000000002", role: "pdv", password: hashedPassword, isBlocked: false },
   ]);
 
   const catDestiladosId = randomUUID();
