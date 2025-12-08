@@ -61,7 +61,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useOrderUpdates } from '@/hooks/use-order-updates';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { ProductImageUploader } from '@/components/ProductImageUploader';
-import type { Order, Product, Category, Motoboy, User, Settings as SettingsType } from '@shared/schema';
+import { ExpandableOrderCard } from '@/components/ExpandableOrderCard';
+import type { Order, Product, Category, Motoboy, User, Settings as SettingsType, OrderItem } from '@shared/schema';
 import { ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS, ORDER_TYPE_LABELS, type OrderStatus, type PaymentMethod, type OrderType } from '@shared/schema';
 
 const tabs = [
@@ -128,6 +129,10 @@ function StatusBadge({ status }: { status: OrderStatus }) {
   );
 }
 
+interface OrderWithItems extends Order {
+  items?: OrderItem[];
+}
+
 function OrdersTab() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -138,6 +143,24 @@ function OrdersTab() {
   const { data: orders = [], isLoading } = useQuery<Order[]>({
     queryKey: ['/api/orders'],
   });
+
+  const orderIds = orders.map(o => o.id).join(',');
+  
+  const { data: orderItems = [] } = useQuery<OrderItem[]>({
+    queryKey: ['/api/order-items', orderIds],
+    queryFn: async () => {
+      if (!orderIds) return [];
+      const res = await fetch(`/api/order-items?orderIds=${encodeURIComponent(orderIds)}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: orders.length > 0,
+  });
+
+  const ordersWithItems: OrderWithItems[] = orders.map(order => ({
+    ...order,
+    items: orderItems.filter(item => item.orderId === order.id),
+  }));
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: OrderStatus }) => {
@@ -155,6 +178,7 @@ function OrdersTab() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/order-items'] });
       toast({ title: 'Pedido excluido!' });
     },
     onError: () => {
@@ -162,7 +186,7 @@ function OrdersTab() {
     },
   });
 
-  const filteredOrders = orders.filter(order => {
+  const filteredOrders = ordersWithItems.filter(order => {
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
     const searchLower = searchTerm.toLowerCase().trim();
     const matchesSearch = searchLower === '' || 
@@ -185,6 +209,51 @@ function OrdersTab() {
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
     setCurrentPage(1);
+  };
+
+  const renderOrderActions = (order: OrderWithItems) => {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {order.status === 'pending' && (
+          <>
+            <Button 
+              size="sm"
+              onClick={() => updateStatusMutation.mutate({ orderId: order.id, status: 'accepted' })}
+              disabled={updateStatusMutation.isPending}
+              data-testid={`button-accept-${order.id}`}
+            >
+              <Check className="w-4 h-4 mr-1" />
+              Aceitar
+            </Button>
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={() => updateStatusMutation.mutate({ orderId: order.id, status: 'cancelled' })}
+              disabled={updateStatusMutation.isPending}
+              data-testid={`button-cancel-${order.id}`}
+            >
+              <X className="w-4 h-4 mr-1" />
+              Cancelar
+            </Button>
+          </>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-muted-foreground/50"
+          onClick={() => {
+            if (confirm('Tem certeza que deseja excluir este pedido?')) {
+              deleteOrderMutation.mutate(order.id);
+            }
+          }}
+          disabled={deleteOrderMutation.isPending}
+          data-testid={`button-delete-order-${order.id}`}
+        >
+          <Trash2 className="h-4 w-4 mr-1" />
+          Excluir
+        </Button>
+      </div>
+    );
   };
 
   return (
@@ -237,71 +306,14 @@ function OrdersTab() {
           </div>
           <div className="grid gap-4">
             {paginatedOrders.map(order => (
-              <Card key={order.id} data-testid={`card-order-${order.id}`}>
-                <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 pb-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <CardTitle className="text-lg">Pedido #{order.id.slice(0, 8)}</CardTitle>
-                    <StatusBadge status={order.status as OrderStatus} />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">{formatDate(order.createdAt)}</span>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-muted-foreground/50 hover:text-destructive"
-                      onClick={() => {
-                        if (confirm('Tem certeza que deseja excluir este pedido?')) {
-                          deleteOrderMutation.mutate(order.id);
-                        }
-                      }}
-                      disabled={deleteOrderMutation.isPending}
-                      data-testid={`button-delete-order-${order.id}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex flex-wrap gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Total: </span>
-                      <span className="font-semibold text-primary">{formatCurrency(order.total)}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Pagamento: </span>
-                      <span>{PAYMENT_METHOD_LABELS[order.paymentMethod as PaymentMethod]}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Entrega: </span>
-                      <span>{formatCurrency(order.deliveryFee)}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-2">
-                    {order.status === 'pending' && (
-                      <Button 
-                        size="sm"
-                        onClick={() => updateStatusMutation.mutate({ orderId: order.id, status: 'accepted' })}
-                        data-testid={`button-accept-${order.id}`}
-                      >
-                        <Check className="w-4 h-4 mr-1" />
-                        Aceitar
-                      </Button>
-                    )}
-                    {order.status === 'pending' && (
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        onClick={() => updateStatusMutation.mutate({ orderId: order.id, status: 'cancelled' })}
-                        data-testid={`button-cancel-${order.id}`}
-                      >
-                        <X className="w-4 h-4 mr-1" />
-                        Cancelar
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+              <ExpandableOrderCard
+                key={order.id}
+                order={order}
+                variant="admin"
+                defaultExpanded={false}
+                showActions={true}
+                actions={renderOrderActions(order)}
+              />
             ))}
           </div>
           {totalPages > 1 && (
@@ -348,6 +360,24 @@ function DeliveryTab() {
 
   const { toast } = useToast();
 
+  const orderIds = orders.map(o => o.id).join(',');
+  
+  const { data: orderItems = [] } = useQuery<OrderItem[]>({
+    queryKey: ['/api/order-items', 'delivery', orderIds],
+    queryFn: async () => {
+      if (!orderIds) return [];
+      const res = await fetch(`/api/order-items?orderIds=${encodeURIComponent(orderIds)}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: orders.length > 0,
+  });
+
+  const ordersWithItems: OrderWithItems[] = orders.map(order => ({
+    ...order,
+    items: orderItems.filter(item => item.orderId === order.id),
+  }));
+
   const assignMotoboyMutation = useMutation({
     mutationFn: async ({ orderId, motoboyId }: { orderId: string; motoboyId: string }) => {
       return apiRequest('PATCH', `/api/orders/${orderId}/assign`, { motoboyId });
@@ -358,9 +388,26 @@ function DeliveryTab() {
     },
   });
 
-  const readyOrders = orders.filter(o => o.status === 'ready');
-  const dispatchedOrders = orders.filter(o => o.status === 'dispatched');
+  const readyOrders = ordersWithItems.filter(o => o.status === 'ready');
+  const dispatchedOrders = ordersWithItems.filter(o => o.status === 'dispatched');
   const activeMotoboys = motoboys.filter(m => m.isActive);
+
+  const renderReadyOrderActions = (order: OrderWithItems) => (
+    <Select 
+      onValueChange={(motoboyId) => assignMotoboyMutation.mutate({ orderId: order.id, motoboyId })}
+    >
+      <SelectTrigger className="bg-secondary border-primary/30" data-testid={`select-motoboy-${order.id}`}>
+        <SelectValue placeholder="Atribuir motoboy" />
+      </SelectTrigger>
+      <SelectContent>
+        {activeMotoboys.map(motoboy => (
+          <SelectItem key={motoboy.id} value={motoboy.id}>
+            {motoboy.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 
   return (
     <div className="space-y-6">
@@ -374,28 +421,14 @@ function DeliveryTab() {
           </h3>
           <div className="space-y-4">
             {readyOrders.map(order => (
-              <Card key={order.id} data-testid={`card-ready-order-${order.id}`}>
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-semibold">Pedido #{order.id.slice(0, 8)}</span>
-                    <span className="text-primary font-bold">{formatCurrency(order.total)}</span>
-                  </div>
-                  <Select 
-                    onValueChange={(motoboyId) => assignMotoboyMutation.mutate({ orderId: order.id, motoboyId })}
-                  >
-                    <SelectTrigger className="bg-secondary border-primary/30" data-testid={`select-motoboy-${order.id}`}>
-                      <SelectValue placeholder="Atribuir motoboy" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {activeMotoboys.map(motoboy => (
-                        <SelectItem key={motoboy.id} value={motoboy.id}>
-                          {motoboy.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </CardContent>
-              </Card>
+              <ExpandableOrderCard
+                key={order.id}
+                order={order}
+                variant="admin"
+                defaultExpanded={false}
+                showActions={true}
+                actions={renderReadyOrderActions(order)}
+              />
             ))}
             {readyOrders.length === 0 && (
               <Card>
@@ -414,14 +447,13 @@ function DeliveryTab() {
           </h3>
           <div className="space-y-4">
             {dispatchedOrders.map(order => (
-              <Card key={order.id} data-testid={`card-dispatched-order-${order.id}`}>
-                <CardContent className="p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-semibold">Pedido #{order.id.slice(0, 8)}</span>
-                    <StatusBadge status="dispatched" />
-                  </div>
-                </CardContent>
-              </Card>
+              <ExpandableOrderCard
+                key={order.id}
+                order={order}
+                variant="admin"
+                defaultExpanded={false}
+                showActions={false}
+              />
             ))}
             {dispatchedOrders.length === 0 && (
               <Card>
