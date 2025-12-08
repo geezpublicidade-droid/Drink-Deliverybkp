@@ -40,6 +40,7 @@ export interface IStorage {
   deleteCategory(id: string): Promise<boolean>;
 
   getProducts(): Promise<Product[]>;
+  getAllProducts(): Promise<Product[]>;
   getProduct(id: string): Promise<Product | undefined>;
   getProductsByCategory(categoryId: string): Promise<Product[]>;
   getTrendingProducts(limit?: number): Promise<{ product: Product; salesCount: number }[]>;
@@ -195,6 +196,11 @@ export class DatabaseStorage implements IStorage {
 
   async getProducts(): Promise<Product[]> {
     const result = await db.select().from(products).where(eq(products.isActive, true));
+    return result.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  }
+
+  async getAllProducts(): Promise<Product[]> {
+    const result = await db.select().from(products);
     return result.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   }
 

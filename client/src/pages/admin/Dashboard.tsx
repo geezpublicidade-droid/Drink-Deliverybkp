@@ -41,7 +41,11 @@ import {
   Search,
   GripVertical,
   FileText,
-  Download
+  Download,
+  Warehouse,
+  AlertTriangle,
+  TrendingUp,
+  BarChart3
 } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -72,6 +76,7 @@ const tabs = [
   { id: 'pdv', label: 'PDV', icon: ShoppingCart },
   { id: 'delivery', label: 'Delivery', icon: Truck },
   { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
+  { id: 'estoque', label: 'Estoque', icon: Warehouse },
   { id: 'clientes', label: 'Clientes', icon: Users },
   { id: 'produtos', label: 'Produtos', icon: ShoppingBag },
   { id: 'categorias', label: 'Categorias', icon: Grid3X3 },
@@ -1078,6 +1083,444 @@ function PDVTab() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface StockReportSummary {
+  totalProducts: number;
+  activeProducts: number;
+  totalUnitsInStock: number;
+  totalCostValue: number;
+  totalSaleValue: number;
+  totalPotentialProfit: number;
+  lowStockCount: number;
+  outOfStockCount: number;
+}
+
+interface StockReportProduct {
+  id: string;
+  name: string;
+  categoryId: string;
+  categoryName: string;
+  stock: number;
+  costPrice: number;
+  salePrice: number;
+  profitMargin: number;
+  profitPerUnit: number;
+  totalCostValue: number;
+  totalSaleValue: number;
+  totalPotentialProfit: number;
+  isActive: boolean;
+}
+
+interface StockReportData {
+  summary: StockReportSummary;
+  products: StockReportProduct[];
+}
+
+interface LowStockProduct {
+  id: string;
+  name: string;
+  categoryId: string;
+  categoryName: string;
+  currentStock: number;
+  suggestedPurchase: number;
+  costPrice: number;
+  estimatedPurchaseCost: number;
+}
+
+interface LowStockData {
+  summary: {
+    totalLowStockItems: number;
+    totalEstimatedPurchaseCost: number;
+    threshold: number;
+  };
+  products: LowStockProduct[];
+}
+
+function EstoqueTab() {
+  const [showReport, setShowReport] = useState(false);
+  const [showLowStock, setShowLowStock] = useState(false);
+  const { toast } = useToast();
+
+  const { data: stockReport, isLoading: isLoadingReport, refetch: refetchReport } = useQuery<StockReportData>({
+    queryKey: ['/api/stock/report'],
+    enabled: showReport,
+  });
+
+  const { data: lowStockData, isLoading: isLoadingLowStock, refetch: refetchLowStock } = useQuery<LowStockData>({
+    queryKey: ['/api/stock/low-stock'],
+    enabled: showLowStock,
+  });
+
+  const handleGenerateReport = () => {
+    setShowReport(true);
+    setShowLowStock(false);
+    if (showReport) {
+      refetchReport();
+    }
+  };
+
+  const handleShowLowStock = () => {
+    setShowLowStock(true);
+    setShowReport(false);
+    if (showLowStock) {
+      refetchLowStock();
+    }
+  };
+
+  const handleExportStockReport = () => {
+    if (!stockReport) return;
+    
+    const csvData = [
+      ['Relatorio de Estoque - Vibe Drinks'],
+      ['Data:', new Date().toLocaleDateString('pt-BR')],
+      [],
+      ['RESUMO'],
+      ['Total de Produtos:', stockReport.summary.totalProducts],
+      ['Produtos Ativos:', stockReport.summary.activeProducts],
+      ['Unidades em Estoque:', stockReport.summary.totalUnitsInStock],
+      ['Valor Total em Custo:', formatCurrency(stockReport.summary.totalCostValue)],
+      ['Valor Total em Venda:', formatCurrency(stockReport.summary.totalSaleValue)],
+      ['Lucro Potencial:', formatCurrency(stockReport.summary.totalPotentialProfit)],
+      ['Produtos com Estoque Baixo:', stockReport.summary.lowStockCount],
+      ['Produtos sem Estoque:', stockReport.summary.outOfStockCount],
+      [],
+      ['PRODUTOS'],
+      ['Nome', 'Categoria', 'Estoque', 'Custo Unit.', 'Venda Unit.', 'Margem %', 'Valor Custo Total', 'Valor Venda Total', 'Lucro Potencial', 'Ativo'],
+      ...stockReport.products.map(p => [
+        p.name,
+        p.categoryName,
+        p.stock,
+        p.costPrice.toFixed(2),
+        p.salePrice.toFixed(2),
+        p.profitMargin.toFixed(1) + '%',
+        p.totalCostValue.toFixed(2),
+        p.totalSaleValue.toFixed(2),
+        p.totalPotentialProfit.toFixed(2),
+        p.isActive ? 'Sim' : 'Nao',
+      ]),
+    ];
+    
+    const csv = csvData.map(row => Array.isArray(row) ? row.join(',') : row).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `relatorio-estoque-${new Date().toISOString().slice(0,10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'Relatorio exportado!' });
+  };
+
+  const handleExportLowStock = () => {
+    if (!lowStockData) return;
+    
+    const csvData = [
+      ['Lista de Compras - Vibe Drinks'],
+      ['Data:', new Date().toLocaleDateString('pt-BR')],
+      [],
+      ['RESUMO'],
+      ['Produtos com Estoque Baixo:', lowStockData.summary.totalLowStockItems],
+      ['Custo Estimado de Compra:', formatCurrency(lowStockData.summary.totalEstimatedPurchaseCost)],
+      [],
+      ['PRODUTOS PARA COMPRAR'],
+      ['Nome', 'Categoria', 'Estoque Atual', 'Qtd Sugerida', 'Custo Unit.', 'Custo Estimado'],
+      ...lowStockData.products.map(p => [
+        p.name,
+        p.categoryName,
+        p.currentStock,
+        p.suggestedPurchase,
+        p.costPrice.toFixed(2),
+        p.estimatedPurchaseCost.toFixed(2),
+      ]),
+    ];
+    
+    const csv = csvData.map(row => Array.isArray(row) ? row.join(',') : row).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `lista-compras-${new Date().toISOString().slice(0,10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'Lista de compras exportada!' });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h2 className="font-serif text-3xl text-primary">Estoque</h2>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={handleGenerateReport} data-testid="button-generate-stock-report">
+            <BarChart3 className="w-4 h-4 mr-2" />
+            Relatorio de Estoque
+          </Button>
+          <Button variant="outline" onClick={handleShowLowStock} data-testid="button-show-low-stock">
+            <AlertTriangle className="w-4 h-4 mr-2" />
+            Lista de Compras
+          </Button>
+        </div>
+      </div>
+
+      {!showReport && !showLowStock && (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            <Warehouse className="w-16 h-16 mx-auto mb-4 text-primary/50" />
+            <p className="text-lg mb-2">Gerenciamento de Estoque</p>
+            <p className="text-sm">Clique em um dos botoes acima para gerar relatorios ou ver a lista de compras</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {showReport && (
+        <div className="space-y-6">
+          {isLoadingReport ? (
+            <div className="grid gap-4 md:grid-cols-4">
+              {[1, 2, 3, 4].map(i => (
+                <Card key={i} className="animate-pulse">
+                  <CardContent className="h-24" />
+                </Card>
+              ))}
+            </div>
+          ) : stockReport && (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <h3 className="text-xl font-semibold">Relatorio Completo de Estoque</h3>
+                <Button variant="outline" size="sm" onClick={handleExportStockReport} data-testid="button-export-stock-report">
+                  <Download className="w-4 h-4 mr-2" />
+                  Exportar CSV
+                </Button>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Total Produtos</CardTitle>
+                    <Package className="w-4 h-4 text-primary" />
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold" data-testid="text-total-products">{stockReport.summary.totalProducts}</p>
+                    <p className="text-xs text-muted-foreground">{stockReport.summary.activeProducts} ativos</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Unidades em Estoque</CardTitle>
+                    <Warehouse className="w-4 h-4 text-primary" />
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold" data-testid="text-total-units">{stockReport.summary.totalUnitsInStock}</p>
+                    <p className="text-xs text-muted-foreground">unidades totais</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Valor em Custo</CardTitle>
+                    <DollarSign className="w-4 h-4 text-primary" />
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold" data-testid="text-total-cost">{formatCurrency(stockReport.summary.totalCostValue)}</p>
+                    <p className="text-xs text-muted-foreground">investido em estoque</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Valor em Venda</CardTitle>
+                    <TrendingUp className="w-4 h-4 text-green-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-green-500" data-testid="text-total-sale">{formatCurrency(stockReport.summary.totalSaleValue)}</p>
+                    <p className="text-xs text-muted-foreground">potencial de faturamento</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Lucro Potencial</CardTitle>
+                    <TrendingUp className="w-4 h-4 text-primary" />
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-primary" data-testid="text-potential-profit">{formatCurrency(stockReport.summary.totalPotentialProfit)}</p>
+                    <p className="text-xs text-muted-foreground">se tudo for vendido</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Estoque Baixo</CardTitle>
+                    <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-yellow-500" data-testid="text-low-stock-count">{stockReport.summary.lowStockCount}</p>
+                    <p className="text-xs text-muted-foreground">produtos com menos de 10 un</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Sem Estoque</CardTitle>
+                    <X className="w-4 h-4 text-destructive" />
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-destructive" data-testid="text-out-of-stock">{stockReport.summary.outOfStockCount}</p>
+                    <p className="text-xs text-muted-foreground">produtos zerados</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Detalhes por Produto</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="border-b border-border/30">
+                        <tr>
+                          <th className="text-left p-4 text-muted-foreground font-medium">Produto</th>
+                          <th className="text-left p-4 text-muted-foreground font-medium">Categoria</th>
+                          <th className="text-right p-4 text-muted-foreground font-medium">Estoque</th>
+                          <th className="text-right p-4 text-muted-foreground font-medium">Custo</th>
+                          <th className="text-right p-4 text-muted-foreground font-medium">Venda</th>
+                          <th className="text-right p-4 text-muted-foreground font-medium">Margem</th>
+                          <th className="text-right p-4 text-muted-foreground font-medium">Valor Custo</th>
+                          <th className="text-right p-4 text-muted-foreground font-medium">Valor Venda</th>
+                          <th className="text-center p-4 text-muted-foreground font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stockReport.products.map(product => (
+                          <tr key={product.id} className="border-b border-border/20 last:border-0" data-testid={`row-stock-${product.id}`}>
+                            <td className="p-4 font-medium">{product.name}</td>
+                            <td className="p-4 text-muted-foreground">{product.categoryName}</td>
+                            <td className="p-4 text-right">
+                              <span className={`font-medium ${product.stock === 0 ? 'text-destructive' : product.stock < 10 ? 'text-yellow-500' : ''}`}>
+                                {product.stock}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right">{formatCurrency(product.costPrice)}</td>
+                            <td className="p-4 text-right font-medium">{formatCurrency(product.salePrice)}</td>
+                            <td className="p-4 text-right">{product.profitMargin.toFixed(1)}%</td>
+                            <td className="p-4 text-right">{formatCurrency(product.totalCostValue)}</td>
+                            <td className="p-4 text-right font-medium text-primary">{formatCurrency(product.totalSaleValue)}</td>
+                            <td className="p-4 text-center">
+                              <Badge className={product.isActive ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}>
+                                {product.isActive ? 'Ativo' : 'Inativo'}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {stockReport.products.length === 0 && (
+                    <div className="py-12 text-center text-muted-foreground">
+                      Nenhum produto cadastrado
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </div>
+      )}
+
+      {showLowStock && (
+        <div className="space-y-6">
+          {isLoadingLowStock ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              {[1, 2].map(i => (
+                <Card key={i} className="animate-pulse">
+                  <CardContent className="h-24" />
+                </Card>
+              ))}
+            </div>
+          ) : lowStockData && (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <h3 className="text-xl font-semibold">Lista de Compras Sugerida</h3>
+                <Button variant="outline" size="sm" onClick={handleExportLowStock} data-testid="button-export-low-stock">
+                  <Download className="w-4 h-4 mr-2" />
+                  Exportar CSV
+                </Button>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Produtos com Estoque Baixo</CardTitle>
+                    <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-yellow-500" data-testid="text-low-stock-items">{lowStockData.summary.totalLowStockItems}</p>
+                    <p className="text-xs text-muted-foreground">produtos precisam repor</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Custo Estimado de Compra</CardTitle>
+                    <DollarSign className="w-4 h-4 text-primary" />
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold" data-testid="text-estimated-cost">{formatCurrency(lowStockData.summary.totalEstimatedPurchaseCost)}</p>
+                    <p className="text-xs text-muted-foreground">para repor todos os itens</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Produtos para Comprar</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="border-b border-border/30">
+                        <tr>
+                          <th className="text-left p-4 text-muted-foreground font-medium">Produto</th>
+                          <th className="text-left p-4 text-muted-foreground font-medium">Categoria</th>
+                          <th className="text-right p-4 text-muted-foreground font-medium">Estoque Atual</th>
+                          <th className="text-right p-4 text-muted-foreground font-medium">Qtd Sugerida</th>
+                          <th className="text-right p-4 text-muted-foreground font-medium">Custo Unit.</th>
+                          <th className="text-right p-4 text-muted-foreground font-medium">Custo Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lowStockData.products.map(product => (
+                          <tr key={product.id} className="border-b border-border/20 last:border-0" data-testid={`row-low-stock-${product.id}`}>
+                            <td className="p-4 font-medium">{product.name}</td>
+                            <td className="p-4 text-muted-foreground">{product.categoryName}</td>
+                            <td className="p-4 text-right">
+                              <span className={`font-medium ${product.currentStock === 0 ? 'text-destructive' : 'text-yellow-500'}`}>
+                                {product.currentStock}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right font-medium text-primary">{product.suggestedPurchase}</td>
+                            <td className="p-4 text-right">{formatCurrency(product.costPrice)}</td>
+                            <td className="p-4 text-right font-medium">{formatCurrency(product.estimatedPurchaseCost)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {lowStockData.products.length === 0 && (
+                    <div className="py-12 text-center text-muted-foreground">
+                      <Check className="w-12 h-12 mx-auto mb-4 text-green-500" />
+                      <p>Todos os produtos estao com estoque adequado!</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -2581,6 +3024,7 @@ export default function AdminDashboard() {
       case 'pdv': return <PDVTab />;
       case 'delivery': return <DeliveryTab />;
       case 'financeiro': return <FinanceiroTab />;
+      case 'estoque': return <EstoqueTab />;
       case 'clientes': return <ClientesTab />;
       case 'produtos': return <ProdutosTab />;
       case 'categorias': return <CategoriasTab />;

@@ -496,6 +496,23 @@ export async function registerRoutes(
           unitPrice: item.unitPrice,
           totalPrice: item.totalPrice,
         });
+        
+        // Deduct stock for each item
+        const product = await storage.getProduct(item.productId);
+        if (product) {
+          const previousStock = product.stock;
+          const newStock = Math.max(0, previousStock - item.quantity);
+          await storage.updateProduct(item.productId, { stock: newStock });
+          
+          // Log the stock change
+          await storage.createStockLog({
+            productId: item.productId,
+            previousStock,
+            newStock,
+            change: -item.quantity,
+            reason: `Pedido #${order.id.slice(0, 8)}`,
+          });
+        }
       }
     }
     
@@ -913,6 +930,96 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error updating product image:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Stock Report - Complete inventory report with values, profits, and projections
+  app.get("/api/stock/report", async (req, res) => {
+    try {
+      const allProducts = await storage.getAllProducts();
+      const categories = await storage.getCategories();
+      
+      const categoryMap = new Map(categories.map(c => [c.id, c.name]));
+      
+      const productDetails = allProducts.map(product => {
+        const costPrice = parseFloat(product.costPrice);
+        const salePrice = parseFloat(product.salePrice);
+        const profitMargin = parseFloat(product.profitMargin);
+        const stock = product.stock;
+        
+        const totalCostValue = costPrice * stock;
+        const totalSaleValue = salePrice * stock;
+        const profitPerUnit = salePrice - costPrice;
+        const totalPotentialProfit = profitPerUnit * stock;
+        
+        return {
+          id: product.id,
+          name: product.name,
+          categoryId: product.categoryId,
+          categoryName: categoryMap.get(product.categoryId) || 'Sem categoria',
+          stock,
+          costPrice,
+          salePrice,
+          profitMargin,
+          profitPerUnit,
+          totalCostValue,
+          totalSaleValue,
+          totalPotentialProfit,
+          isActive: product.isActive,
+        };
+      });
+      
+      const summary = {
+        totalProducts: allProducts.length,
+        activeProducts: allProducts.filter(p => p.isActive).length,
+        totalUnitsInStock: productDetails.reduce((sum, p) => sum + p.stock, 0),
+        totalCostValue: productDetails.reduce((sum, p) => sum + p.totalCostValue, 0),
+        totalSaleValue: productDetails.reduce((sum, p) => sum + p.totalSaleValue, 0),
+        totalPotentialProfit: productDetails.reduce((sum, p) => sum + p.totalPotentialProfit, 0),
+        lowStockCount: productDetails.filter(p => p.stock < 10 && p.isActive).length,
+        outOfStockCount: productDetails.filter(p => p.stock === 0 && p.isActive).length,
+      };
+      
+      res.json({ summary, products: productDetails });
+    } catch (error) {
+      console.error("Error generating stock report:", error);
+      res.status(500).json({ error: "Failed to generate stock report" });
+    }
+  });
+
+  // Low Stock Suggestions - Products with stock below threshold
+  app.get("/api/stock/low-stock", async (req, res) => {
+    try {
+      const threshold = parseInt(req.query.threshold as string) || 10;
+      const allProducts = await storage.getAllProducts();
+      const categories = await storage.getCategories();
+      
+      const categoryMap = new Map(categories.map(c => [c.id, c.name]));
+      
+      const lowStockProducts = allProducts
+        .filter(p => p.isActive && p.stock < threshold)
+        .map(product => ({
+          id: product.id,
+          name: product.name,
+          categoryId: product.categoryId,
+          categoryName: categoryMap.get(product.categoryId) || 'Sem categoria',
+          currentStock: product.stock,
+          suggestedPurchase: Math.max(10 - product.stock, 5), // Suggest at least 5 units or enough to reach 10
+          costPrice: parseFloat(product.costPrice),
+          estimatedPurchaseCost: parseFloat(product.costPrice) * Math.max(10 - product.stock, 5),
+        }))
+        .sort((a, b) => a.currentStock - b.currentStock);
+      
+      const summary = {
+        totalLowStockItems: lowStockProducts.length,
+        totalEstimatedPurchaseCost: lowStockProducts.reduce((sum, p) => sum + p.estimatedPurchaseCost, 0),
+        threshold,
+      };
+      
+      res.json({ summary, products: lowStockProducts });
+    } catch (error) {
+      console.error("Error getting low stock suggestions:", error);
+      res.status(500).json({ error: "Failed to get low stock suggestions" });
     }
   });
 
