@@ -131,8 +131,11 @@ function StatusBadge({ status }: { status: OrderStatus }) {
   );
 }
 
-interface OrderWithItems extends Order {
+interface OrderWithDetails extends Order {
   items?: OrderItem[];
+  userName?: string;
+  userWhatsapp?: string;
+  motoboy?: Motoboy;
 }
 
 function OrdersTab() {
@@ -144,6 +147,14 @@ function OrdersTab() {
 
   const { data: orders = [], isLoading } = useQuery<Order[]>({
     queryKey: ['/api/orders'],
+  });
+
+  const { data: users = [] } = useQuery<User[]>({
+    queryKey: ['/api/users'],
+  });
+
+  const { data: motoboysData = [] } = useQuery<Motoboy[]>({
+    queryKey: ['/api/motoboys'],
   });
 
   const orderIds = orders.map(o => o.id).join(',');
@@ -159,10 +170,17 @@ function OrdersTab() {
     enabled: orders.length > 0,
   });
 
-  const ordersWithItems: OrderWithItems[] = orders.map(order => ({
-    ...order,
-    items: orderItems.filter(item => item.orderId === order.id),
-  }));
+  const ordersWithDetails: OrderWithDetails[] = orders.map(order => {
+    const user = users.find(u => u.id === order.userId);
+    const motoboy = order.motoboyId ? motoboysData.find(m => m.id === order.motoboyId) : undefined;
+    return {
+      ...order,
+      items: orderItems.filter(item => item.orderId === order.id),
+      userName: user?.name || order.customerName || 'Cliente',
+      userWhatsapp: user?.whatsapp,
+      motoboy,
+    };
+  });
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: OrderStatus }) => {
@@ -188,12 +206,13 @@ function OrdersTab() {
     },
   });
 
-  const filteredOrders = ordersWithItems.filter(order => {
+  const filteredOrders = ordersWithDetails.filter(order => {
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
     const searchLower = searchTerm.toLowerCase().trim();
     const matchesSearch = searchLower === '' || 
       order.id.toLowerCase().includes(searchLower) ||
-      (order.customerName && order.customerName.toLowerCase().includes(searchLower));
+      (order.customerName && order.customerName.toLowerCase().includes(searchLower)) ||
+      (order.userName && order.userName.toLowerCase().includes(searchLower));
     return matchesStatus && matchesSearch;
   });
 
@@ -213,7 +232,7 @@ function OrdersTab() {
     setCurrentPage(1);
   };
 
-  const renderOrderActions = (order: OrderWithItems) => {
+  const renderOrderActions = (order: OrderWithDetails) => {
     return (
       <div className="flex flex-wrap items-center gap-2">
         {order.status === 'pending' && (
@@ -356,6 +375,10 @@ function DeliveryTab() {
     queryKey: ['/api/orders'],
   });
 
+  const { data: users = [] } = useQuery<User[]>({
+    queryKey: ['/api/users'],
+  });
+
   const { data: motoboys = [] } = useQuery<Motoboy[]>({
     queryKey: ['/api/motoboys'],
   });
@@ -375,10 +398,17 @@ function DeliveryTab() {
     enabled: orders.length > 0,
   });
 
-  const ordersWithItems: OrderWithItems[] = orders.map(order => ({
-    ...order,
-    items: orderItems.filter(item => item.orderId === order.id),
-  }));
+  const ordersWithDetails: OrderWithDetails[] = orders.map(order => {
+    const user = users.find(u => u.id === order.userId);
+    const motoboy = order.motoboyId ? motoboys.find(m => m.id === order.motoboyId) : undefined;
+    return {
+      ...order,
+      items: orderItems.filter(item => item.orderId === order.id),
+      userName: user?.name || order.customerName || 'Cliente',
+      userWhatsapp: user?.whatsapp,
+      motoboy,
+    };
+  });
 
   const assignMotoboyMutation = useMutation({
     mutationFn: async ({ orderId, motoboyId }: { orderId: string; motoboyId: string }) => {
@@ -390,11 +420,11 @@ function DeliveryTab() {
     },
   });
 
-  const readyOrders = ordersWithItems.filter(o => o.status === 'ready');
-  const dispatchedOrders = ordersWithItems.filter(o => o.status === 'dispatched');
+  const readyOrders = ordersWithDetails.filter(o => o.status === 'ready');
+  const dispatchedOrders = ordersWithDetails.filter(o => o.status === 'dispatched');
   const activeMotoboys = motoboys.filter(m => m.isActive);
 
-  const renderReadyOrderActions = (order: OrderWithItems) => (
+  const renderReadyOrderActions = (order: OrderWithDetails) => (
     <Select 
       onValueChange={(motoboyId) => assignMotoboyMutation.mutate({ orderId: order.id, motoboyId })}
     >

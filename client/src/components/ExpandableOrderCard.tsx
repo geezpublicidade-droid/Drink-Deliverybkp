@@ -1,11 +1,31 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Clock, Package, Truck, MapPin, Phone, User as UserIcon } from 'lucide-react';
+import { ChevronDown, ChevronUp, Clock, Package, Truck, MapPin, Phone, User as UserIcon, MessageCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import type { Order, OrderItem, Address, Motoboy } from '@shared/schema';
 import { ORDER_STATUS_LABELS, PAYMENT_METHOD_LABELS, ORDER_TYPE_LABELS, type OrderStatus, type PaymentMethod, type OrderType } from '@shared/schema';
+
+function openWhatsApp(phone: string, message?: string) {
+  const cleanPhone = phone.replace(/\D/g, '');
+  const formattedPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+  const url = message 
+    ? `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`
+    : `https://wa.me/${formattedPhone}`;
+  window.open(url, '_blank');
+}
+
+function formatPhone(phone: string): string {
+  const clean = phone.replace(/\D/g, '');
+  if (clean.length === 11) {
+    return `(${clean.slice(0, 2)}) ${clean.slice(2, 7)}-${clean.slice(7)}`;
+  }
+  if (clean.length === 10) {
+    return `(${clean.slice(0, 2)}) ${clean.slice(2, 6)}-${clean.slice(6)}`;
+  }
+  return phone;
+}
 
 interface OrderWithDetails extends Order {
   items?: OrderItem[];
@@ -221,26 +241,62 @@ export function ExpandableOrderCard({
               </div>
             )}
 
-            {order.userWhatsapp && onOpenWhatsApp && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full border-green-500/50 text-green-400"
-                onClick={() => onOpenWhatsApp(order.userWhatsapp!)}
-                data-testid={`button-whatsapp-${order.id}`}
-              >
-                <Phone className="h-4 w-4 mr-2" />
-                Contatar Cliente
-              </Button>
+            {order.userWhatsapp && (
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <UserIcon className="h-4 w-4 text-green-400" />
+                    <div className="text-sm">
+                      <span className="text-green-300">Cliente: </span>
+                      <span className="font-medium text-foreground">{customerName}</span>
+                      <span className="text-muted-foreground ml-2">{formatPhone(order.userWhatsapp)}</span>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-green-400 border-green-500/50 flex-shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openWhatsApp(order.userWhatsapp!, `Ola! Sobre o pedido #${orderId} da Vibe Drinks...`);
+                    }}
+                    data-testid={`button-whatsapp-customer-${order.id}`}
+                  >
+                    <MessageCircle className="h-4 w-4 mr-1" />
+                    WhatsApp
+                  </Button>
+                </div>
+              </div>
             )}
 
             {order.motoboy && (
               <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
-                <div className="flex items-center gap-2">
-                  <Truck className="h-4 w-4 text-purple-400" />
-                  <span className="text-sm text-purple-300">
-                    Motoboy: <span className="font-medium">{order.motoboy.name}</span>
-                  </span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Truck className="h-4 w-4 text-purple-400" />
+                    <div className="text-sm">
+                      <span className="text-purple-300">Motoboy: </span>
+                      <span className="font-medium text-foreground">{order.motoboy.name}</span>
+                      {order.motoboy.whatsapp && (
+                        <span className="text-muted-foreground ml-2">{formatPhone(order.motoboy.whatsapp)}</span>
+                      )}
+                    </div>
+                  </div>
+                  {order.motoboy.whatsapp && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-purple-400 border-purple-500/50 flex-shrink-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openWhatsApp(order.motoboy!.whatsapp, `Ola! Sobre o pedido #${orderId} da Vibe Drinks...`);
+                      }}
+                      data-testid={`button-whatsapp-motoboy-${order.id}`}
+                    >
+                      <MessageCircle className="h-4 w-4 mr-1" />
+                      WhatsApp
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
