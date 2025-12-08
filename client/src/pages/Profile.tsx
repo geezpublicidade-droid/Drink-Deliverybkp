@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { 
   ArrowLeft, User, MapPin, Package, Clock, Truck, CheckCircle, XCircle, 
-  ChefHat, AlertCircle, Edit2, Trash2, Plus, Save, X, Phone
+  ChefHat, AlertCircle, Edit2, Trash2, Plus, Save, X, Phone, LogOut
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,7 +67,7 @@ type AddressFormValues = z.infer<typeof addressFormSchema>;
 export default function Profile() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { user, isAuthenticated, login, setAddress: setAuthAddress, address: currentAddress } = useAuth();
+  const { user, isAuthenticated, login, logout, setAddress: setAuthAddress, address: currentAddress } = useAuth();
 
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isAddressDialogOpen, setIsAddressDialogOpen] = useState(false);
@@ -275,18 +275,35 @@ export default function Profile() {
     return null;
   }
 
+  const handleLogout = () => {
+    logout();
+    setLocation('/');
+    toast({ title: 'Voce saiu da sua conta' });
+  };
+
   return (
     <div className="min-h-screen bg-background py-8 px-4">
       <div className="max-w-4xl mx-auto">
-        <Button
-          variant="ghost"
-          className="mb-6 text-primary"
-          onClick={() => setLocation('/')}
-          data-testid="button-back"
-        >
-          <ArrowLeft className="h-5 w-5 mr-2" />
-          Voltar ao cardapio
-        </Button>
+        <div className="flex items-center justify-between mb-6">
+          <Button
+            variant="ghost"
+            className="text-primary"
+            onClick={() => setLocation('/')}
+            data-testid="button-back"
+          >
+            <ArrowLeft className="h-5 w-5 mr-2" />
+            Voltar ao cardapio
+          </Button>
+          <Button
+            variant="outline"
+            className="border-destructive/50 text-destructive"
+            onClick={handleLogout}
+            data-testid="button-logout"
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Sair da conta
+          </Button>
+        </div>
 
         <h1 className="font-serif text-3xl text-primary mb-8">Meu Perfil</h1>
 
