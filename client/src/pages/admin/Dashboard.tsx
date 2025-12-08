@@ -1752,6 +1752,8 @@ function ProdutosTab() {
   const [costPrice, setCostPrice] = useState<string>('');
   const [profitMargin, setProfitMargin] = useState<string>('');
   const [salePrice, setSalePrice] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const { toast } = useToast();
 
   const handleOpenDialog = (product: Product | null) => {
@@ -2033,32 +2035,73 @@ function ProdutosTab() {
         </Dialog>
       </div>
 
-      <DndContext 
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext 
-          items={products.map(p => p.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {products.map(product => {
-              const category = categories.find(c => c.id === product.categoryId);
-              return (
-                <SortableProductItem
-                  key={product.id}
-                  product={product}
-                  category={category}
-                  onEdit={handleOpenDialog}
-                  onDelete={(id) => deleteMutation.mutate(id)}
-                  formatCurrency={formatCurrency}
-                />
-              );
-            })}
-          </div>
-        </SortableContext>
-      </DndContext>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Pesquisar produtos..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9"
+            data-testid="input-search-products"
+          />
+        </div>
+        <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
+          <SelectTrigger className="w-full sm:w-[200px]" data-testid="select-filter-category">
+            <SelectValue placeholder="Todas as categorias" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as categorias</SelectItem>
+            {categories.map(cat => (
+              <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {(() => {
+        const filteredProducts = products.filter(product => {
+          const matchesSearch = searchTerm === '' || 
+            product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (product.description && product.description.toLowerCase().includes(searchTerm.toLowerCase()));
+          const matchesCategory = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
+          return matchesSearch && matchesCategory;
+        });
+
+        return (
+          <>
+            <p className="text-sm text-muted-foreground">
+              {filteredProducts.length} {filteredProducts.length === 1 ? 'produto encontrado' : 'produtos encontrados'}
+            </p>
+            <DndContext 
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext 
+                items={filteredProducts.map(p => p.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {filteredProducts.map(product => {
+                    const category = categories.find(c => c.id === product.categoryId);
+                    return (
+                      <SortableProductItem
+                        key={product.id}
+                        product={product}
+                        category={category}
+                        onEdit={handleOpenDialog}
+                        onDelete={(id) => deleteMutation.mutate(id)}
+                        formatCurrency={formatCurrency}
+                      />
+                    );
+                  })}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </>
+        );
+      })()}
     </div>
   );
 }
