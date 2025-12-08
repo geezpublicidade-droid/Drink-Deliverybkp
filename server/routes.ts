@@ -2,7 +2,22 @@ import type { Express, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcrypt";
-import { createSignedUploadUrl, getStorageUrl } from "./supabase";
+import multer from "multer";
+import { uploadFile, getStorageUrl } from "./supabase";
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  },
+});
 
 const SALT_ROUNDS = 10;
 
@@ -791,30 +806,25 @@ export async function registerRoutes(
   });
 
   // Supabase Storage Routes
-  // Get signed upload URL for images (admin only)
-  app.post("/api/storage/upload-url", async (req, res) => {
-    const userId = req.headers['x-user-id'] as string | undefined;
-    const { folder = 'uploads' } = req.body;
+  // Direct file upload endpoint using server-side Supabase service role
+  app.post("/api/storage/upload", upload.single('file'), async (req, res) => {
+    const { folder = 'products' } = req.body;
     
-    if (!userId) {
-      return res.status(401).json({ error: "Unauthorized: User ID required" });
-    }
-    
-    const user = await storage.getUser(userId);
-    if (!user) {
-      return res.status(401).json({ error: "Unauthorized: User not found" });
-    }
-    
-    if (user.role !== 'admin' && user.role !== 'pdv') {
-      return res.status(403).json({ error: "Forbidden: Admin access required" });
+    if (!req.file) {
+      return res.status(400).json({ error: "No file provided" });
     }
     
     try {
-      const uploadData = await createSignedUploadUrl(folder);
-      res.json(uploadData);
+      const result = await uploadFile(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+        folder
+      );
+      res.json(result);
     } catch (error) {
-      console.error("Error getting upload URL:", error);
-      return res.status(500).json({ error: "Failed to get upload URL" });
+      console.error("Error uploading file:", error);
+      return res.status(500).json({ error: "Failed to upload file" });
     }
   });
 

@@ -1,9 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export const STORAGE_BUCKET = 'images';
 
@@ -15,29 +10,26 @@ export function getStorageUrl(path: string): string {
 
 export async function uploadImage(
   file: File,
-  folder: string = 'uploads'
+  folder: string = 'products'
 ): Promise<{ path: string; publicUrl: string }> {
-  const fileExt = file.name.split('.').pop();
-  const fileName = `${folder}/${crypto.randomUUID()}.${fileExt}`;
-  
-  const { data, error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .upload(fileName, file, {
-      cacheControl: '3600',
-      upsert: false
-    });
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('folder', folder);
 
-  if (error) {
-    throw new Error(`Failed to upload image: ${error.message}`);
+  const response = await fetch('/api/storage/upload', {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to upload image');
   }
 
-  const { data: urlData } = supabase.storage
-    .from(STORAGE_BUCKET)
-    .getPublicUrl(data.path);
-
+  const result = await response.json();
   return {
-    path: data.path,
-    publicUrl: urlData.publicUrl
+    path: result.path,
+    publicUrl: result.publicUrl
   };
 }
 
@@ -45,12 +37,5 @@ export async function deleteImage(path: string): Promise<void> {
   if (!path || path.startsWith('http')) {
     return;
   }
-  
-  const { error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .remove([path]);
-
-  if (error) {
-    console.error(`Failed to delete image: ${error.message}`);
-  }
+  console.log('Delete image not implemented for server-side storage:', path);
 }
