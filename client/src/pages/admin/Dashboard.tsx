@@ -32,7 +32,11 @@ import {
   Droplets,
   ChevronLeft,
   ChevronRight,
-  Calendar
+  Calendar,
+  Eye,
+  Phone,
+  Key,
+  Power
 } from 'lucide-react';
 import { useRef} from 'react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
@@ -1133,35 +1137,78 @@ function BannersTab() {
   );
 }
 
+interface MotoboyDetails extends Motoboy {
+  hasPassword?: boolean;
+  userId?: string | null;
+}
+
 function MotoboysTab() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [editingMotoboy, setEditingMotoboy] = useState<Motoboy | null>(null);
+  const [viewingMotoboyId, setViewingMotoboyId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const { data: motoboys = [] } = useQuery<Motoboy[]>({
     queryKey: ['/api/motoboys'],
   });
 
+  const { data: motoboyDetails } = useQuery<MotoboyDetails>({
+    queryKey: ['/api/motoboys', viewingMotoboyId, 'details'],
+    enabled: !!viewingMotoboyId,
+    queryFn: async () => {
+      const res = await fetch(`/api/motoboys/${viewingMotoboyId}/details`);
+      if (!res.ok) throw new Error('Failed to fetch motoboy details');
+      return res.json();
+    }
+  });
+
   const createMutation = useMutation({
-    mutationFn: async (data: Partial<Motoboy>) => {
-      return apiRequest('POST', '/api/motoboys', data);
+    mutationFn: async (data: Partial<Motoboy> & { password?: string }) => {
+      const res = await apiRequest('POST', '/api/motoboys', data);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Erro ao criar motoboy');
+      }
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/motoboys'] });
       toast({ title: 'Motoboy criado!' });
       setIsDialogOpen(false);
     },
+    onError: (error: Error) => {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+    },
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<Motoboy> }) => {
-      return apiRequest('PATCH', `/api/motoboys/${id}`, data);
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Motoboy> & { password?: string } }) => {
+      const res = await apiRequest('PATCH', `/api/motoboys/${id}`, data);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Erro ao atualizar motoboy');
+      }
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/motoboys'] });
       toast({ title: 'Motoboy atualizado!' });
       setIsDialogOpen(false);
       setEditingMotoboy(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      return apiRequest('PATCH', `/api/motoboys/${id}`, { isActive });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/motoboys'] });
+      toast({ title: 'Status atualizado!' });
     },
   });
 
@@ -1178,12 +1225,28 @@ function MotoboysTab() {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const data = {
+    const password = formData.get('password') as string;
+    
+    // Validate password format (6 digits)
+    if (password && !/^\d{6}$/.test(password)) {
+      toast({ 
+        title: 'Erro', 
+        description: 'A senha deve ter exatamente 6 digitos numericos',
+        variant: 'destructive' 
+      });
+      return;
+    }
+    
+    const data: Partial<Motoboy> & { password?: string } = {
       name: formData.get('name') as string,
       whatsapp: formData.get('whatsapp') as string,
       photoUrl: formData.get('photoUrl') as string || null,
-      isActive: true,
+      isActive: formData.get('isActive') === 'on',
     };
+    
+    if (password) {
+      data.password = password;
+    }
 
     if (editingMotoboy) {
       updateMutation.mutate({ id: editingMotoboy.id, data });
@@ -1192,11 +1255,19 @@ function MotoboysTab() {
     }
   };
 
+  const handleViewDetails = (motoboyId: string) => {
+    setViewingMotoboyId(motoboyId);
+    setIsDetailDialogOpen(true);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h2 className="font-serif text-3xl text-primary">Motoboys</h2>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => { 
+          setIsDialogOpen(open); 
+          if (!open) setEditingMotoboy(null);
+        }}>
           <DialogTrigger asChild>
             <Button onClick={() => setEditingMotoboy(null)} data-testid="button-add-motoboy">
               <Plus className="w-4 h-4 mr-2" />
@@ -1210,50 +1281,209 @@ function MotoboysTab() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <Label htmlFor="name">Nome</Label>
-                <Input id="name" name="name" defaultValue={editingMotoboy?.name} required data-testid="input-motoboy-name" />
+                <Input 
+                  id="name" 
+                  name="name" 
+                  defaultValue={editingMotoboy?.name} 
+                  required 
+                  data-testid="input-motoboy-name" 
+                />
               </div>
               <div>
                 <Label htmlFor="whatsapp">WhatsApp</Label>
-                <Input id="whatsapp" name="whatsapp" defaultValue={editingMotoboy?.whatsapp} required data-testid="input-motoboy-whatsapp" />
+                <Input 
+                  id="whatsapp" 
+                  name="whatsapp" 
+                  placeholder="11999999999"
+                  defaultValue={editingMotoboy?.whatsapp} 
+                  required 
+                  data-testid="input-motoboy-whatsapp" 
+                />
+              </div>
+              <div>
+                <Label htmlFor="password">
+                  Senha (6 digitos) {editingMotoboy && '- deixe vazio para manter atual'}
+                </Label>
+                <Input 
+                  id="password" 
+                  name="password" 
+                  type="password"
+                  maxLength={6}
+                  pattern="\d{6}"
+                  placeholder={editingMotoboy ? "******" : "123456"}
+                  data-testid="input-motoboy-password" 
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  A senha e usada para o motoboy acessar o app
+                </p>
               </div>
               <div>
                 <Label htmlFor="photoUrl">URL da Foto (opcional)</Label>
-                <Input id="photoUrl" name="photoUrl" defaultValue={editingMotoboy?.photoUrl || ''} data-testid="input-motoboy-photo" />
+                <Input 
+                  id="photoUrl" 
+                  name="photoUrl" 
+                  defaultValue={editingMotoboy?.photoUrl || ''} 
+                  data-testid="input-motoboy-photo" 
+                />
               </div>
-              <Button type="submit" className="w-full" data-testid="button-submit-motoboy">
-                {editingMotoboy ? 'Salvar' : 'Criar'}
+              <div className="flex items-center gap-3">
+                <Switch 
+                  id="isActive" 
+                  name="isActive"
+                  defaultChecked={editingMotoboy?.isActive ?? true}
+                  data-testid="switch-motoboy-active"
+                />
+                <Label htmlFor="isActive">Motoboy Ativo</Label>
+              </div>
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={createMutation.isPending || updateMutation.isPending}
+                data-testid="button-submit-motoboy"
+              >
+                {(createMutation.isPending || updateMutation.isPending) ? 'Salvando...' : (editingMotoboy ? 'Salvar' : 'Criar')}
               </Button>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
+      {/* Detail View Dialog */}
+      <Dialog open={isDetailDialogOpen} onOpenChange={(open) => {
+        setIsDetailDialogOpen(open);
+        if (!open) setViewingMotoboyId(null);
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Detalhes do Motoboy</DialogTitle>
+          </DialogHeader>
+          {motoboyDetails ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                {motoboyDetails.photoUrl ? (
+                  <img 
+                    src={motoboyDetails.photoUrl} 
+                    alt={motoboyDetails.name} 
+                    className="w-16 h-16 object-cover rounded-full"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
+                    <Bike className="w-8 h-8 text-primary" />
+                  </div>
+                )}
+                <div>
+                  <h3 className="text-lg font-semibold">{motoboyDetails.name}</h3>
+                  <Badge className={motoboyDetails.isActive ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}>
+                    {motoboyDetails.isActive ? 'Ativo' : 'Inativo'}
+                  </Badge>
+                </div>
+              </div>
+              
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center gap-3 p-3 bg-secondary/50 rounded-md">
+                  <Phone className="w-5 h-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">WhatsApp</p>
+                    <p className="font-medium" data-testid="text-motoboy-whatsapp">{motoboyDetails.whatsapp}</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3 p-3 bg-secondary/50 rounded-md">
+                  <Key className="w-5 h-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Senha de Acesso</p>
+                    <p className="font-medium" data-testid="text-motoboy-password-status">
+                      {motoboyDetails.hasPassword ? 'Configurada' : 'Nao configurada'}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3 p-3 bg-secondary/50 rounded-md">
+                  <Power className="w-5 h-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Status</p>
+                    <p className="font-medium" data-testid="text-motoboy-status">
+                      {motoboyDetails.isActive ? 'Pode receber entregas' : 'Bloqueado para entregas'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex gap-2 pt-2">
+                <Button 
+                  className="flex-1"
+                  onClick={() => { 
+                    const motoboy = motoboys.find(m => m.id === viewingMotoboyId);
+                    if (motoboy) {
+                      setEditingMotoboy(motoboy);
+                      setIsDetailDialogOpen(false);
+                      setIsDialogOpen(true);
+                    }
+                  }}
+                  data-testid="button-edit-from-details"
+                >
+                  <Edit2 className="w-4 h-4 mr-2" />
+                  Editar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="py-8 text-center text-muted-foreground">
+              Carregando...
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {motoboys.map(motoboy => (
           <Card key={motoboy.id} data-testid={`card-motoboy-${motoboy.id}`}>
-            <CardContent className="p-4 flex items-center gap-4">
-              {motoboy.photoUrl ? (
-                <img src={motoboy.photoUrl} alt={motoboy.name} className="w-12 h-12 object-cover rounded-full" />
-              ) : (
-                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
-                  <Bike className="w-6 h-6 text-primary" />
+            <CardContent className="p-4">
+              <div className="flex items-center gap-4">
+                {motoboy.photoUrl ? (
+                  <img src={motoboy.photoUrl} alt={motoboy.name} className="w-12 h-12 object-cover rounded-full" />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                    <Bike className="w-6 h-6 text-primary" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold truncate">{motoboy.name}</h3>
+                  <p className="text-sm text-muted-foreground truncate">{motoboy.whatsapp}</p>
                 </div>
-              )}
-              <div className="flex-1">
-                <h3 className="font-semibold">{motoboy.name}</h3>
-                <p className="text-sm text-muted-foreground">{motoboy.whatsapp}</p>
+                <Badge className={motoboy.isActive ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}>
+                  {motoboy.isActive ? 'Ativo' : 'Inativo'}
+                </Badge>
               </div>
-              <Badge className={motoboy.isActive ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}>
-                {motoboy.isActive ? 'Ativo' : 'Inativo'}
-              </Badge>
-              <div className="flex gap-2">
+              <div className="flex gap-2 mt-4 pt-4 border-t border-border">
                 <Button 
-                  size="icon" 
-                  variant="ghost"
+                  size="sm" 
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => handleViewDetails(motoboy.id)}
+                  data-testid={`button-view-motoboy-${motoboy.id}`}
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  Ver
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  className="flex-1"
                   onClick={() => { setEditingMotoboy(motoboy); setIsDialogOpen(true); }}
                   data-testid={`button-edit-motoboy-${motoboy.id}`}
                 >
-                  <Edit2 className="w-4 h-4" />
+                  <Edit2 className="w-4 h-4 mr-2" />
+                  Editar
+                </Button>
+                <Button 
+                  size="icon" 
+                  variant="ghost"
+                  onClick={() => toggleActiveMutation.mutate({ id: motoboy.id, isActive: !motoboy.isActive })}
+                  data-testid={`button-toggle-motoboy-${motoboy.id}`}
+                  title={motoboy.isActive ? 'Desativar' : 'Ativar'}
+                >
+                  <Power className={`w-4 h-4 ${motoboy.isActive ? 'text-green-500' : 'text-red-500'}`} />
                 </Button>
                 <Button 
                   size="icon" 

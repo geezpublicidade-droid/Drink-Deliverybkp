@@ -481,20 +481,136 @@ export async function registerRoutes(
     res.json(motoboy);
   });
 
+  // Get motoboy with linked user data (for admin view)
+  app.get("/api/motoboys/:id/details", async (req, res) => {
+    const motoboy = await storage.getMotoboy(req.params.id);
+    if (!motoboy) return res.status(404).json({ error: "Motoboy not found" });
+    
+    const user = await storage.getUserByWhatsapp(motoboy.whatsapp);
+    const hasPassword = user?.password ? true : false;
+    
+    res.json({
+      ...motoboy,
+      hasPassword,
+      userId: user?.id || null,
+    });
+  });
+
   app.post("/api/motoboys", async (req, res) => {
-    const motoboy = await storage.createMotoboy(req.body);
+    const { name, whatsapp, photoUrl, isActive, password } = req.body;
+    
+    // Validate password if provided (must be 6 digits)
+    if (password && !/^\d{6}$/.test(password)) {
+      return res.status(400).json({ error: "Senha deve ter exatamente 6 digitos numericos" });
+    }
+    
+    // Check if whatsapp already exists in motoboys table
+    const existingMotoboy = await storage.getMotoboyByWhatsapp(whatsapp);
+    if (existingMotoboy) {
+      return res.status(400).json({ error: "Ja existe um motoboy com este WhatsApp" });
+    }
+    
+    // Create the motoboy record
+    const motoboy = await storage.createMotoboy({ name, whatsapp, photoUrl, isActive });
+    
+    // Create or update user record for motoboy authentication
+    let user = await storage.getUserByWhatsapp(whatsapp);
+    if (!user) {
+      // Create new user with motoboy role
+      const hashedPassword = password ? await bcrypt.hash(password, SALT_ROUNDS) : null;
+      user = await storage.createUser({
+        name,
+        whatsapp,
+        role: "motoboy",
+        password: hashedPassword,
+      });
+    } else if (password) {
+      // Update existing user with new password and role
+      const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+      await storage.updateUser(user.id, { 
+        password: hashedPassword,
+        role: "motoboy",
+        name,
+      });
+    }
+    
     res.status(201).json(motoboy);
   });
 
   app.patch("/api/motoboys/:id", async (req, res) => {
-    const motoboy = await storage.updateMotoboy(req.params.id, req.body);
-    if (!motoboy) return res.status(404).json({ error: "Motoboy not found" });
+    const { name, whatsapp, photoUrl, isActive, password } = req.body;
+    
+    // Validate password if provided (must be 6 digits)
+    if (password && !/^\d{6}$/.test(password)) {
+      return res.status(400).json({ error: "Senha deve ter exatamente 6 digitos numericos" });
+    }
+    
+    const existingMotoboy = await storage.getMotoboy(req.params.id);
+    if (!existingMotoboy) {
+      return res.status(404).json({ error: "Motoboy not found" });
+    }
+    
+    // If changing whatsapp, check if new whatsapp is already used by another motoboy
+    if (whatsapp && whatsapp !== existingMotoboy.whatsapp) {
+      const motoboyWithWhatsapp = await storage.getMotoboyByWhatsapp(whatsapp);
+      if (motoboyWithWhatsapp && motoboyWithWhatsapp.id !== req.params.id) {
+        return res.status(400).json({ error: "Ja existe outro motoboy com este WhatsApp" });
+      }
+    }
+    
+    // Update motoboy record
+    const motoboyData: Partial<{ name: string; whatsapp: string; photoUrl: string | null; isActive: boolean }> = {};
+    if (name !== undefined) motoboyData.name = name;
+    if (whatsapp !== undefined) motoboyData.whatsapp = whatsapp;
+    if (photoUrl !== undefined) motoboyData.photoUrl = photoUrl;
+    if (isActive !== undefined) motoboyData.isActive = isActive;
+    
+    const motoboy = await storage.updateMotoboy(req.params.id, motoboyData);
+    
+    // Update linked user record
+    const oldUser = await storage.getUserByWhatsapp(existingMotoboy.whatsapp);
+    if (oldUser) {
+      const userUpdates: Partial<{ name: string; whatsapp: string; password: string }> = {};
+      if (name !== undefined) userUpdates.name = name;
+      if (whatsapp !== undefined) userUpdates.whatsapp = whatsapp;
+      if (password) {
+        userUpdates.password = await bcrypt.hash(password, SALT_ROUNDS);
+      }
+      
+      if (Object.keys(userUpdates).length > 0) {
+        await storage.updateUser(oldUser.id, userUpdates);
+      }
+    } else if (password || whatsapp) {
+      // Create user if doesn't exist and we have data to create
+      const hashedPassword = password ? await bcrypt.hash(password, SALT_ROUNDS) : null;
+      await storage.createUser({
+        name: name || existingMotoboy.name,
+        whatsapp: whatsapp || existingMotoboy.whatsapp,
+        role: "motoboy",
+        password: hashedPassword,
+      });
+    }
+    
     res.json(motoboy);
   });
 
   app.delete("/api/motoboys/:id", async (req, res) => {
+    const motoboy = await storage.getMotoboy(req.params.id);
+    if (!motoboy) {
+      return res.status(404).json({ error: "Motoboy not found" });
+    }
+    
+    // Delete the motoboy record
     const deleted = await storage.deleteMotoboy(req.params.id);
     if (!deleted) return res.status(404).json({ error: "Motoboy not found" });
+    
+    // Note: We don't delete the user record as it may have order history
+    // Just update the user's role to 'customer' if desired
+    const user = await storage.getUserByWhatsapp(motoboy.whatsapp);
+    if (user && user.role === 'motoboy') {
+      await storage.updateUser(user.id, { role: 'customer' });
+    }
+    
     res.status(204).send();
   });
 
