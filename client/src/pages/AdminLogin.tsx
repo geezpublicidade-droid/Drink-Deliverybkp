@@ -110,10 +110,12 @@ export default function AdminLogin() {
       }
     } catch (error: any) {
       let errorMsg = 'Verifique suas credenciais';
-      try {
-        const errorData = await error?.response?.json?.();
-        if (errorData?.error) errorMsg = errorData.error;
-      } catch {}
+      if (error instanceof Response) {
+        try {
+          const errorData = await error.json();
+          if (errorData?.error) errorMsg = errorData.error;
+        } catch {}
+      }
       toast({ title: 'Erro ao fazer login', description: errorMsg, variant: 'destructive' });
     } finally {
       setIsLoading(false);

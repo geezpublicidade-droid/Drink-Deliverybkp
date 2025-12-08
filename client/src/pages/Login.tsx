@@ -114,10 +114,16 @@ export default function Login() {
         toast({ title: 'Erro', description: data.error || 'Senha incorreta', variant: 'destructive' });
       }
     } catch (error: any) {
-      const errorData = error?.response?.json ? await error.response.json() : null;
+      let errorMsg = 'Verifique sua senha e tente novamente';
+      if (error instanceof Response) {
+        try {
+          const errorData = await error.json();
+          if (errorData?.error) errorMsg = errorData.error;
+        } catch {}
+      }
       toast({ 
         title: 'Erro ao entrar', 
-        description: errorData?.error || 'Verifique sua senha e tente novamente', 
+        description: errorMsg, 
         variant: 'destructive' 
       });
     } finally {
@@ -156,10 +162,16 @@ export default function Login() {
       const redirect = params.get('redirect') || '/';
       setLocation(redirect);
     } catch (error: any) {
-      const errorData = error?.response?.json ? await error.response.json() : null;
+      let errorMsg = 'Tente novamente';
+      if (error instanceof Response) {
+        try {
+          const errorData = await error.json();
+          if (errorData?.error) errorMsg = errorData.error;
+        } catch {}
+      }
       toast({ 
         title: 'Erro ao cadastrar', 
-        description: errorData?.error || 'Tente novamente', 
+        description: errorMsg, 
         variant: 'destructive' 
       });
     } finally {

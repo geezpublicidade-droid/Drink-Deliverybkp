@@ -46,7 +46,11 @@ export async function registerRoutes(
   });
 
   app.patch("/api/users/:id", async (req, res) => {
-    const user = await storage.updateUser(req.params.id, req.body);
+    const userData = { ...req.body };
+    if (userData.password) {
+      userData.password = await bcrypt.hash(userData.password, SALT_ROUNDS);
+    }
+    const user = await storage.updateUser(req.params.id, userData);
     if (!user) return res.status(404).json({ error: "User not found" });
     res.json(user);
   });
