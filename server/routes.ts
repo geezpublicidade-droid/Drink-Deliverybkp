@@ -41,7 +41,8 @@ const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
   accepted: ['preparing', 'cancelled'],
   preparing: ['ready', 'cancelled'],
   ready: ['dispatched', 'cancelled'],
-  dispatched: ['delivered', 'cancelled'],
+  dispatched: ['arrived', 'delivered', 'cancelled'],
+  arrived: ['delivered', 'cancelled'],
   delivered: [],
   cancelled: []
 };
@@ -474,10 +475,10 @@ export async function registerRoutes(
       return res.status(404).json({ error: "Motoboy not found" });
     }
     
-    // Get all orders and filter by motoboyId
+    // Get all orders and filter by motoboyId (include dispatched and arrived)
     const allOrders = await storage.getOrders();
     const motoboyOrders = allOrders.filter(order => 
-      order.motoboyId === motoboyId && order.status === 'dispatched'
+      order.motoboyId === motoboyId && (order.status === 'dispatched' || order.status === 'arrived')
     );
     
     res.json(motoboyOrders);
@@ -551,6 +552,9 @@ export async function registerRoutes(
         break;
       case "dispatched":
         updates.dispatchedAt = now;
+        break;
+      case "arrived":
+        updates.arrivedAt = now;
         break;
       case "delivered":
         updates.deliveredAt = now;

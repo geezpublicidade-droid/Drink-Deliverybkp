@@ -72,6 +72,7 @@ export const orders = pgTable("orders", {
   preparingAt: timestamp("preparing_at"),
   readyAt: timestamp("ready_at"),
   dispatchedAt: timestamp("dispatched_at"),
+  arrivedAt: timestamp("arrived_at"),
   deliveredAt: timestamp("delivered_at"),
 });
 
@@ -132,7 +133,7 @@ export const insertUserSchema = createInsertSchema(users).omit({ id: true, creat
 export const insertAddressSchema = createInsertSchema(addresses).omit({ id: true });
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true, createdAt: true });
 export const insertProductSchema = createInsertSchema(products).omit({ id: true, createdAt: true });
-export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true, acceptedAt: true, preparingAt: true, readyAt: true, dispatchedAt: true, deliveredAt: true });
+export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true, acceptedAt: true, preparingAt: true, readyAt: true, dispatchedAt: true, arrivedAt: true, deliveredAt: true });
 export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true });
 export const insertBannerSchema = createInsertSchema(banners).omit({ id: true, createdAt: true });
 export const insertMotoboySchema = createInsertSchema(motoboys).omit({ id: true, createdAt: true });
@@ -166,7 +167,7 @@ export type CartItem = {
   quantity: number;
 };
 
-export type OrderStatus = "pending" | "accepted" | "preparing" | "ready" | "dispatched" | "delivered" | "cancelled";
+export type OrderStatus = "pending" | "accepted" | "preparing" | "ready" | "dispatched" | "arrived" | "delivered" | "cancelled";
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   pending: "Aguardando",
@@ -174,6 +175,7 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   preparing: "Em produção",
   ready: "Pronto",
   dispatched: "Despachado",
+  arrived: "Cheguei",
   delivered: "Entregue",
   cancelled: "Cancelado",
 };

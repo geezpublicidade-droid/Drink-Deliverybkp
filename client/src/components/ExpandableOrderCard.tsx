@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Clock, Package, Truck, MapPin, Phone, User as UserIcon, MessageCircle } from 'lucide-react';
+import { ChevronDown, ChevronUp, Clock, Package, Truck, MapPin, Phone, User as UserIcon, MessageCircle, Bell } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -54,9 +54,19 @@ const STATUS_COLORS: Record<OrderStatus, string> = {
   preparing: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
   ready: 'bg-green-500/20 text-green-300 border-green-500/30',
   dispatched: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  arrived: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
   delivered: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
   cancelled: 'bg-red-500/20 text-red-300 border-red-500/30',
 };
+
+const ORDER_PROGRESS_STEPS: OrderStatus[] = ['pending', 'accepted', 'preparing', 'ready', 'dispatched', 'arrived', 'delivered'];
+
+function getProgressPercentage(status: OrderStatus): number {
+  if (status === 'cancelled') return 0;
+  const stepIndex = ORDER_PROGRESS_STEPS.indexOf(status);
+  if (stepIndex === -1) return 0;
+  return ((stepIndex + 1) / ORDER_PROGRESS_STEPS.length) * 100;
+}
 
 function formatCurrency(value: number | string): string {
   const num = typeof value === 'string' ? parseFloat(value) : value;
@@ -116,6 +126,36 @@ export function ExpandableOrderCard({
       data-testid={`order-card-${order.id}`}
     >
       <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+        {variant === 'customer' && status !== 'cancelled' && (
+          <div className="px-4 pt-3" data-testid={`progress-bar-${order.id}`}>
+            <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+              <div 
+                className="h-full bg-primary transition-all duration-500 ease-out rounded-full"
+                style={{ width: `${getProgressPercentage(status)}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <span>Pedido</span>
+              <span>Entregue</span>
+            </div>
+          </div>
+        )}
+
+        {variant === 'customer' && status === 'arrived' && (
+          <div 
+            className="mx-4 mt-3 bg-cyan-500/20 border border-cyan-500/50 rounded-lg p-3 animate-pulse"
+            data-testid={`alert-arrived-${order.id}`}
+          >
+            <div className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-cyan-400" />
+              <div>
+                <p className="text-cyan-300 font-semibold text-sm">Motoboy chegou!</p>
+                <p className="text-cyan-200 text-xs">Va ate a porta receber seu pedido</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <CollapsibleTrigger asChild>
           <CardHeader className="cursor-pointer hover-elevate py-3 px-4">
             <div className="flex items-center justify-between gap-2">

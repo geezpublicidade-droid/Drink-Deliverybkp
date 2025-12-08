@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Package, LogOut, RefreshCw, Navigation, CheckCircle, Truck, Wifi, WifiOff } from 'lucide-react';
+import { Package, LogOut, RefreshCw, Navigation, CheckCircle, Truck, Wifi, WifiOff, MapPinCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -91,9 +91,13 @@ export default function MotoboyPage() {
     mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
       return apiRequest('PATCH', `/api/orders/${orderId}/status`, { status });
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/motoboy', currentMotoboy?.id, 'orders'] });
-      toast({ title: 'Entrega confirmada!' });
+      if (variables.status === 'arrived') {
+        toast({ title: 'Chegada confirmada! Cliente foi notificado.' });
+      } else {
+        toast({ title: 'Entrega confirmada!' });
+      }
     },
     onError: () => {
       toast({ title: 'Erro ao atualizar status', variant: 'destructive' });
@@ -121,17 +125,49 @@ export default function MotoboyPage() {
     return null;
   }
 
-  const renderOrderActions = (order: OrderWithDetails) => (
-    <Button
-      className="w-full bg-primary text-primary-foreground py-4 text-base font-semibold"
-      onClick={() => updateStatusMutation.mutate({ orderId: order.id, status: 'delivered' })}
-      disabled={updateStatusMutation.isPending}
-      data-testid={`button-delivered-${order.id}`}
-    >
-      <CheckCircle className="h-5 w-5 mr-2" />
-      Confirmar Entrega Realizada
-    </Button>
-  );
+  const renderOrderActions = (order: OrderWithDetails) => {
+    const status = order.status as string;
+    
+    if (status === 'dispatched') {
+      return (
+        <Button
+          className="w-full bg-cyan-600 text-white py-4 text-base font-semibold"
+          onClick={() => updateStatusMutation.mutate({ orderId: order.id, status: 'arrived' })}
+          disabled={updateStatusMutation.isPending}
+          data-testid={`button-arrived-${order.id}`}
+        >
+          <MapPinCheck className="h-5 w-5 mr-2" />
+          CHEGUEI
+        </Button>
+      );
+    }
+    
+    if (status === 'arrived') {
+      return (
+        <Button
+          className="w-full bg-primary text-primary-foreground py-4 text-base font-semibold"
+          onClick={() => updateStatusMutation.mutate({ orderId: order.id, status: 'delivered' })}
+          disabled={updateStatusMutation.isPending}
+          data-testid={`button-delivered-${order.id}`}
+        >
+          <CheckCircle className="h-5 w-5 mr-2" />
+          Confirmar Entrega Realizada
+        </Button>
+      );
+    }
+
+    return (
+      <Button
+        className="w-full bg-primary text-primary-foreground py-4 text-base font-semibold"
+        onClick={() => updateStatusMutation.mutate({ orderId: order.id, status: 'delivered' })}
+        disabled={updateStatusMutation.isPending}
+        data-testid={`button-delivered-${order.id}`}
+      >
+        <CheckCircle className="h-5 w-5 mr-2" />
+        Confirmar Entrega Realizada
+      </Button>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background">
