@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth';
 import { useOrderUpdates } from '@/hooks/use-order-updates';
+import { useNotificationSound } from '@/hooks/use-notification-sound';
 import { ExpandableOrderCard } from '@/components/ExpandableOrderCard';
 import type { Order, OrderItem, Motoboy } from '@shared/schema';
 
@@ -20,10 +21,16 @@ export default function Orders() {
   const [, setLocation] = useLocation();
   const { user, isAuthenticated } = useAuth();
   const [isSSEConnected, setIsSSEConnected] = useState(false);
+  const { playOnce } = useNotificationSound();
 
   useOrderUpdates({
     onConnected: () => setIsSSEConnected(true),
     onDisconnected: () => setIsSSEConnected(false),
+    onOrderStatusChanged: (data) => {
+      if (data.status === 'dispatched' || data.status === 'arrived') {
+        playOnce();
+      }
+    },
   });
 
   const { data: orders = [], isLoading, refetch } = useQuery<Order[]>({

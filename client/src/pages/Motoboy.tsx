@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useOrderUpdates } from '@/hooks/use-order-updates';
+import { useNotificationSound } from '@/hooks/use-notification-sound';
 import { useAuth } from '@/lib/auth';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { ExpandableOrderCard } from '@/components/ExpandableOrderCard';
@@ -25,16 +26,19 @@ export default function MotoboyPage() {
   const { toast } = useToast();
   const { user, role, logout } = useAuth();
   const [isSSEConnected, setIsSSEConnected] = useState(false);
+  const { playOnce } = useNotificationSound();
 
   useOrderUpdates({
     onConnected: () => setIsSSEConnected(true),
     onDisconnected: () => setIsSSEConnected(false),
     onOrderStatusChanged: (data) => {
       if (data.status === 'ready') {
+        playOnce();
         toast({ title: 'Nova entrega disponivel!' });
       }
     },
     onOrderAssigned: () => {
+      playOnce();
       toast({ title: 'Pedido atribuido!' });
     },
   });

@@ -65,6 +65,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { useOrderUpdates } from '@/hooks/use-order-updates';
+import { useNotificationSound } from '@/hooks/use-notification-sound';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { ProductImageUploader } from '@/components/ProductImageUploader';
 import { ExpandableOrderCard } from '@/components/ExpandableOrderCard';
@@ -3037,11 +3038,15 @@ export default function AdminDashboard() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const [isSSEConnected, setIsSSEConnected] = useState(false);
+  const { playMultiple } = useNotificationSound();
 
   useOrderUpdates({
     onConnected: () => setIsSSEConnected(true),
     onDisconnected: () => setIsSSEConnected(false),
-    onOrderCreated: () => {
+    onOrderCreated: (data) => {
+      if (data.orderType !== 'counter') {
+        playMultiple(5);
+      }
       toast({ title: 'Novo pedido recebido!' });
     },
   });
