@@ -1338,7 +1338,11 @@ function ProdutosTab() {
   });
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -1378,29 +1382,41 @@ function ProdutosTab() {
   });
 
   const reorderMutation = useMutation({
-    mutationFn: async (items: { id: string; sortOrder: number }[]) => {
-      return apiRequest('PATCH', '/api/products/reorder', { items });
+    mutationFn: async (data: { items: { id: string; sortOrder: number }[]; previousData: Product[] }) => {
+      return apiRequest('PATCH', '/api/products/reorder', { items: data.items });
     },
-    onSuccess: () => {
+    onError: (_error, variables) => {
+      queryClient.setQueryData(['/api/products'], variables.previousData);
+      toast({ title: 'Erro ao reordenar', variant: 'destructive' });
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
-      toast({ title: 'Ordem atualizada!' });
     },
   });
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     
-    if (over && active.id !== over.id) {
-      const oldIndex = products.findIndex((p) => p.id === active.id);
-      const newIndex = products.findIndex((p) => p.id === over.id);
+    if (over && active.id !== over.id && !reorderMutation.isPending) {
+      const currentProducts = queryClient.getQueryData<Product[]>(['/api/products']) ?? [];
+      const previousData = [...currentProducts];
       
-      const reordered = arrayMove(products, oldIndex, newIndex);
-      const items = reordered.map((prod, index) => ({
-        id: prod.id,
+      const oldIndex = currentProducts.findIndex((p) => p.id === active.id);
+      const newIndex = currentProducts.findIndex((p) => p.id === over.id);
+      
+      const reordered = arrayMove([...currentProducts], oldIndex, newIndex).map((prod, index) => ({
+        ...prod,
         sortOrder: index + 1,
       }));
       
-      reorderMutation.mutate(items);
+      queryClient.setQueryData(['/api/products'], reordered);
+      
+      const items = reordered.map((prod) => ({
+        id: prod.id,
+        sortOrder: prod.sortOrder ?? 0,
+      }));
+      
+      reorderMutation.mutate({ items, previousData });
     }
   };
 
@@ -1654,7 +1670,11 @@ function CategoriasTab() {
   });
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -1694,29 +1714,41 @@ function CategoriasTab() {
   });
 
   const reorderMutation = useMutation({
-    mutationFn: async (items: { id: string; sortOrder: number }[]) => {
-      return apiRequest('PATCH', '/api/categories/reorder', { items });
+    mutationFn: async (data: { items: { id: string; sortOrder: number }[]; previousData: Category[] }) => {
+      return apiRequest('PATCH', '/api/categories/reorder', { items: data.items });
     },
-    onSuccess: () => {
+    onError: (_error, variables) => {
+      queryClient.setQueryData(['/api/categories'], variables.previousData);
+      toast({ title: 'Erro ao reordenar', variant: 'destructive' });
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
-      toast({ title: 'Ordem atualizada!' });
     },
   });
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     
-    if (over && active.id !== over.id) {
-      const oldIndex = categories.findIndex((c) => c.id === active.id);
-      const newIndex = categories.findIndex((c) => c.id === over.id);
+    if (over && active.id !== over.id && !reorderMutation.isPending) {
+      const currentCategories = queryClient.getQueryData<Category[]>(['/api/categories']) ?? [];
+      const previousData = [...currentCategories];
       
-      const reordered = arrayMove(categories, oldIndex, newIndex);
-      const items = reordered.map((cat, index) => ({
-        id: cat.id,
+      const oldIndex = currentCategories.findIndex((c) => c.id === active.id);
+      const newIndex = currentCategories.findIndex((c) => c.id === over.id);
+      
+      const reordered = arrayMove([...currentCategories], oldIndex, newIndex).map((cat, index) => ({
+        ...cat,
         sortOrder: index + 1,
       }));
       
-      reorderMutation.mutate(items);
+      queryClient.setQueryData(['/api/categories'], reordered);
+      
+      const items = reordered.map((cat) => ({
+        id: cat.id,
+        sortOrder: cat.sortOrder ?? 0,
+      }));
+      
+      reorderMutation.mutate({ items, previousData });
     }
   };
 
