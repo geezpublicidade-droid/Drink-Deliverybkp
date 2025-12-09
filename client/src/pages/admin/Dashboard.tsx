@@ -1744,6 +1744,8 @@ function ProdutosTab() {
   const [salePrice, setSalePrice] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
+  const [isImporting, setIsImporting] = useState(false);
+  const csvInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const handleOpenDialog = (product: Product | null) => {
@@ -1887,6 +1889,50 @@ function ProdutosTab() {
     }
   };
 
+  const handleCSVImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('/api/products/import-csv', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+        toast({ 
+          title: 'Importacao concluida!',
+          description: result.message,
+        });
+      } else {
+        toast({ 
+          title: 'Erro na importacao',
+          description: result.error,
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({ 
+        title: 'Erro na importacao',
+        description: 'Falha ao processar o arquivo CSV',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsImporting(false);
+      if (csvInputRef.current) {
+        csvInputRef.current.value = '';
+      }
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -1918,13 +1964,31 @@ function ProdutosTab() {
           <h2 className="font-serif text-3xl text-primary">Produtos</h2>
           <p className="text-sm text-muted-foreground mt-1">Arraste para reordenar</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
-          <DialogTrigger asChild>
-            <Button onClick={() => handleOpenDialog(null)} data-testid="button-add-product">
-              <Plus className="w-4 h-4 mr-2" />
-              Novo Produto
-            </Button>
-          </DialogTrigger>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={csvInputRef}
+            type="file"
+            accept=".csv"
+            onChange={handleCSVImport}
+            className="hidden"
+            data-testid="input-csv-file"
+          />
+          <Button
+            variant="outline"
+            onClick={() => csvInputRef.current?.click()}
+            disabled={isImporting}
+            data-testid="button-import-csv"
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            {isImporting ? 'Importando...' : 'Importar CSV'}
+          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
+            <DialogTrigger asChild>
+              <Button onClick={() => handleOpenDialog(null)} data-testid="button-add-product">
+                <Plus className="w-4 h-4 mr-2" />
+                Novo Produto
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingProduct ? 'Editar Produto' : 'Novo Produto'}</DialogTitle>

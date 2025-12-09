@@ -19,6 +19,20 @@ const upload = multer({
   },
 });
 
+const uploadCSV = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit for CSV
+  },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only CSV files are allowed'));
+    }
+  },
+});
+
 const SALT_ROUNDS = 10;
 
 // SSE clients for real-time order updates
@@ -425,6 +439,111 @@ export async function registerRoutes(
     const deleted = await storage.deleteProduct(req.params.id);
     if (!deleted) return res.status(404).json({ error: "Product not found" });
     res.status(204).send();
+  });
+
+  // Import products from CSV
+  app.post("/api/products/import-csv", uploadCSV.single('file'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "Nenhum arquivo enviado" });
+      }
+
+      const csvContent = req.file.buffer.toString('utf-8');
+      const lines = csvContent.split('\n').filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        return res.status(400).json({ error: "CSV vazio ou sem dados" });
+      }
+
+      // Parse header to understand column positions
+      const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const produtoIdx = header.findIndex(h => h === 'produto' || h === 'nome' || h === 'name');
+      const categoriaIdx = header.findIndex(h => h === 'categoria' || h === 'category');
+      const precoCompraIdx = header.findIndex(h => h === 'precocompra' || h === 'costprice' || h === 'custo');
+      const precoVendaIdx = header.findIndex(h => h === 'precovenda' || h === 'saleprice' || h === 'preco');
+      const estoqueIdx = header.findIndex(h => h === 'quantidadeestoque' || h === 'estoque' || h === 'stock');
+
+      if (produtoIdx === -1) {
+        return res.status(400).json({ error: "Coluna 'Produto' nao encontrada no CSV" });
+      }
+
+      // Get existing categories
+      const existingCategories = await storage.getCategories();
+      const categoryMap = new Map(existingCategories.map(c => [c.name.toLowerCase(), c.id]));
+
+      let imported = 0;
+      let errors: string[] = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        // Parse CSV line handling commas in quotes
+        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        
+        const productName = values[produtoIdx];
+        if (!productName) {
+          errors.push(`Linha ${i + 1}: Nome do produto vazio`);
+          continue;
+        }
+
+        // Handle category
+        let categoryId: string | null = null;
+        if (categoriaIdx !== -1 && values[categoriaIdx]) {
+          const categoryName = values[categoriaIdx];
+          const existingCategoryId = categoryMap.get(categoryName.toLowerCase());
+          
+          if (existingCategoryId) {
+            categoryId = existingCategoryId;
+          } else {
+            // Create new category
+            const newCategory = await storage.createCategory({
+              name: categoryName,
+              icon: 'box',
+              isActive: true,
+            });
+            categoryMap.set(categoryName.toLowerCase(), newCategory.id);
+            categoryId = newCategory.id;
+          }
+        }
+
+        // Parse prices and stock
+        const costPrice = precoCompraIdx !== -1 ? parseFloat(values[precoCompraIdx]) || 0 : 0;
+        const salePrice = precoVendaIdx !== -1 ? parseFloat(values[precoVendaIdx]) || 0 : 0;
+        const stock = estoqueIdx !== -1 ? parseInt(values[estoqueIdx]) || 0 : 0;
+        
+        // Calculate profit margin
+        const profitMargin = costPrice > 0 ? ((salePrice - costPrice) / costPrice) * 100 : 0;
+
+        try {
+          await storage.createProduct({
+            name: productName,
+            description: null,
+            categoryId,
+            costPrice: costPrice.toString(),
+            salePrice: salePrice.toString(),
+            profitMargin: profitMargin.toFixed(2),
+            stock,
+            imageUrl: null,
+            productType: null,
+            isActive: true,
+          });
+          imported++;
+        } catch (err) {
+          errors.push(`Linha ${i + 1}: Erro ao criar produto "${productName}"`);
+        }
+      }
+
+      res.json({ 
+        success: true, 
+        imported, 
+        errors: errors.length > 0 ? errors : undefined,
+        message: `${imported} produtos importados com sucesso${errors.length > 0 ? `, ${errors.length} erros` : ''}`
+      });
+    } catch (error: any) {
+      console.error("Error importing CSV:", error);
+      res.status(500).json({ error: "Erro ao processar CSV: " + error.message });
+    }
   });
 
   app.get("/api/orders", async (_req, res) => {
