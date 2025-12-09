@@ -2450,12 +2450,16 @@ function ProdutosTab() {
 
 function SortableCategoryItem({ 
   category, 
+  productCount,
   onEdit, 
-  onDelete 
+  onDelete,
+  onView
 }: { 
-  category: Category; 
+  category: Category;
+  productCount: number;
   onEdit: (cat: Category) => void; 
   onDelete: (id: string) => void;
+  onView: (cat: Category) => void;
 }) {
   const {
     attributes,
@@ -2495,9 +2499,21 @@ function SortableCategoryItem({
         </div>
         <div className="flex-1">
           <h3 className="font-semibold">{category.name}</h3>
-          <p className="text-sm text-muted-foreground">Ordem: {category.sortOrder}</p>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>Ordem: {category.sortOrder}</span>
+            <span>|</span>
+            <span>{productCount} produto{productCount !== 1 ? 's' : ''}</span>
+          </div>
         </div>
         <div className="flex gap-2">
+          <Button 
+            size="icon" 
+            variant="ghost"
+            onClick={() => onView(category)}
+            data-testid={`button-view-category-${category.id}`}
+          >
+            <Eye className="w-4 h-4" />
+          </Button>
           <Button 
             size="icon" 
             variant="ghost"
@@ -2523,12 +2539,26 @@ function SortableCategoryItem({
 function CategoriasTab() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [viewingCategory, setViewingCategory] = useState<Category | null>(null);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [selectedIcon, setSelectedIcon] = useState<string>('glass-water');
   const { toast } = useToast();
 
   const { data: categories = [] } = useQuery<Category[]>({
     queryKey: ['/api/categories'],
   });
+
+  const { data: products = [] } = useQuery<Product[]>({
+    queryKey: ['/api/products'],
+  });
+
+  const getProductCountByCategory = (categoryId: string) => {
+    return products.filter(p => p.categoryId === categoryId).length;
+  };
+
+  const getProductsByCategory = (categoryId: string) => {
+    return products.filter(p => p.categoryId === categoryId);
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -2566,13 +2596,36 @@ function CategoriasTab() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest('DELETE', `/api/categories/${id}`);
+      const response = await apiRequest('DELETE', `/api/categories/${id}`);
+      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
       toast({ title: 'Categoria excluida!' });
     },
+    onError: (error: Error) => {
+      let description = 'Nao foi possivel excluir a categoria. Verifique se nao existem produtos vinculados.';
+      try {
+        const match = error.message.match(/^\d+:\s*(.+)$/);
+        if (match) {
+          const parsed = JSON.parse(match[1]);
+          if (parsed.error) description = parsed.error;
+        }
+      } catch {
+        // Use default description
+      }
+      toast({ 
+        title: 'Erro ao excluir categoria', 
+        description,
+        variant: 'destructive' 
+      });
+    },
   });
+
+  const handleViewCategory = (category: Category) => {
+    setViewingCategory(category);
+    setIsViewDialogOpen(true);
+  };
 
   const reorderMutation = useMutation({
     mutationFn: async (data: { items: { id: string; sortOrder: number }[]; previousData: Category[] }) => {
@@ -2716,13 +2769,80 @@ function CategoriasTab() {
               <SortableCategoryItem
                 key={category.id}
                 category={category}
+                productCount={getProductCountByCategory(category.id)}
                 onEdit={(cat) => handleOpenCategoryDialog(cat)}
                 onDelete={(id) => deleteMutation.mutate(id)}
+                onView={handleViewCategory}
               />
             ))}
           </div>
         </SortableContext>
       </DndContext>
+
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {viewingCategory && (
+                <>
+                  {(() => {
+                    const IconComp = getCategoryIcon(viewingCategory.iconUrl);
+                    return <IconComp className="w-5 h-5 text-primary" />;
+                  })()}
+                  Produtos em: {viewingCategory.name}
+                </>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+
+          {viewingCategory && (
+            <div className="space-y-4">
+              {getProductsByCategory(viewingCategory.id).length === 0 ? (
+                <Card>
+                  <CardContent className="py-8 text-center text-muted-foreground">
+                    Nenhum produto nesta categoria
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {getProductsByCategory(viewingCategory.id).map(product => (
+                    <Card key={product.id}>
+                      <CardContent className="p-4 flex items-center gap-4">
+                        {product.imageUrl ? (
+                          <img 
+                            src={product.imageUrl} 
+                            alt={product.name} 
+                            className="w-14 h-14 object-contain rounded-lg bg-white/10" 
+                          />
+                        ) : (
+                          <div className="w-14 h-14 rounded-lg bg-secondary flex items-center justify-center">
+                            <ShoppingBag className="w-5 h-5 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium truncate">{product.name}</h4>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge className={product.isActive ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}>
+                              {product.isActive ? 'Ativo' : 'Inativo'}
+                            </Badge>
+                            <span className="text-sm text-muted-foreground">
+                              Estoque: {product.stock}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-primary">{formatCurrency(product.salePrice)}</p>
+                          <p className="text-xs text-muted-foreground">Custo: {formatCurrency(product.costPrice)}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
