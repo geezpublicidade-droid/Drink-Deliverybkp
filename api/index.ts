@@ -24,6 +24,32 @@ app.use(async (_req, _res, next) => {
   next();
 });
 
+// Health check endpoint for diagnosing database connection
+app.get("/api/health", async (_req, res) => {
+  try {
+    const categories = await storage.getCategories();
+    const users = await storage.getUsers();
+    res.json({ 
+      status: "ok", 
+      database: "connected",
+      timestamp: new Date().toISOString(),
+      data: {
+        categoriesCount: categories.length,
+        usersCount: users.length
+      }
+    });
+  } catch (error: any) {
+    console.error("Health check failed:", error);
+    res.status(500).json({ 
+      status: "error", 
+      database: "disconnected",
+      timestamp: new Date().toISOString(),
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
 // SSE endpoint - Not supported in serverless environment
 app.get("/api/orders/sse", (_req, res) => {
   res.status(501).json({
@@ -125,36 +151,50 @@ app.delete("/api/users/:id", async (req, res) => {
 
 // Auth
 app.post("/api/auth/login", async (req, res) => {
-  const { username, password, role } = req.body;
-  const users = await storage.getUsers();
-  
-  let candidates;
-  if (role) {
-    candidates = users.filter(u => 
-      u.name.toLowerCase() === username.toLowerCase() && u.role === role
-    );
-  } else {
-    candidates = users.filter(u => 
-      u.name.toLowerCase() === username.toLowerCase() && 
-      (u.role === 'admin' || u.role === 'kitchen' || u.role === 'motoboy' || u.role === 'pdv')
-    );
-  }
-  
-  let user = null;
-  for (const candidate of candidates) {
-    if (!candidate.password) continue;
-    const isValid = await bcrypt.compare(password, candidate.password);
-    if (isValid) {
-      user = candidate;
-      break;
+  try {
+    const { username, password, role } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ success: false, error: "Usuario e senha sao obrigatorios" });
     }
+    
+    const users = await storage.getUsers();
+    
+    let candidates;
+    if (role) {
+      candidates = users.filter(u => 
+        u.name.toLowerCase() === username.toLowerCase() && u.role === role
+      );
+    } else {
+      candidates = users.filter(u => 
+        u.name.toLowerCase() === username.toLowerCase() && 
+        (u.role === 'admin' || u.role === 'kitchen' || u.role === 'motoboy' || u.role === 'pdv')
+      );
+    }
+    
+    if (candidates.length === 0) {
+      return res.status(401).json({ success: false, error: "Usuario nao encontrado" });
+    }
+    
+    let user = null;
+    for (const candidate of candidates) {
+      if (!candidate.password) continue;
+      const isValid = await bcrypt.compare(password, candidate.password);
+      if (isValid) {
+        user = candidate;
+        break;
+      }
+    }
+    
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Senha incorreta" });
+    }
+    const { password: _, ...safeUser } = user;
+    res.json({ success: true, user: safeUser, role: user.role });
+  } catch (error: any) {
+    console.error("Login error:", error);
+    res.status(500).json({ success: false, error: "Erro interno do servidor", details: error.message });
   }
-  
-  if (!user) {
-    return res.status(401).json({ success: false, error: "Invalid credentials" });
-  }
-  const { password: _, ...safeUser } = user;
-  res.json({ success: true, user: safeUser, role: user.role });
 });
 
 app.post("/api/auth/whatsapp", async (req, res) => {
@@ -185,52 +225,70 @@ app.post("/api/auth/check-phone", async (req, res) => {
 });
 
 app.post("/api/auth/customer-login", async (req, res) => {
-  const { whatsapp, password } = req.body;
-  
-  if (!password || !/^\d{6}$/.test(password)) {
-    return res.status(400).json({ success: false, error: "Senha deve ter exatamente 6 digitos" });
+  try {
+    const { whatsapp, password } = req.body;
+    
+    if (!whatsapp) {
+      return res.status(400).json({ success: false, error: "WhatsApp e obrigatorio" });
+    }
+    
+    if (!password || !/^\d{6}$/.test(password)) {
+      return res.status(400).json({ success: false, error: "Senha deve ter exatamente 6 digitos" });
+    }
+    
+    const motoboy = await storage.getMotoboyByWhatsapp(whatsapp);
+    if (motoboy) {
+      return res.status(403).json({ success: false, error: "Motoboys devem usar o login de funcionarios", isMotoboy: true });
+    }
+    
+    const user = await storage.getUserByWhatsapp(whatsapp);
+    if (!user) return res.status(401).json({ success: false, error: "Usuario nao encontrado" });
+    if (user.isBlocked) return res.status(403).json({ success: false, error: "Usuario bloqueado" });
+    if (!user.password) return res.status(401).json({ success: false, error: "Senha nao cadastrada" });
+    
+    const isValid = await bcrypt.compare(password, user.password);
+    if (!isValid) return res.status(401).json({ success: false, error: "Senha incorreta" });
+    
+    const addresses = await storage.getAddresses(user.id);
+    const defaultAddress = addresses.find(a => a.isDefault) || addresses[0];
+    
+    const { password: _, ...safeUser } = user;
+    res.json({ success: true, user: safeUser, address: defaultAddress || null });
+  } catch (error: any) {
+    console.error("Customer login error:", error);
+    res.status(500).json({ success: false, error: "Erro interno do servidor", details: error.message });
   }
-  
-  const motoboy = await storage.getMotoboyByWhatsapp(whatsapp);
-  if (motoboy) {
-    return res.status(403).json({ success: false, error: "Motoboys devem usar o login de funcionarios", isMotoboy: true });
-  }
-  
-  const user = await storage.getUserByWhatsapp(whatsapp);
-  if (!user) return res.status(401).json({ success: false, error: "Usuario nao encontrado" });
-  if (user.isBlocked) return res.status(403).json({ success: false, error: "Usuario bloqueado" });
-  if (!user.password) return res.status(401).json({ success: false, error: "Senha nao cadastrada" });
-  
-  const isValid = await bcrypt.compare(password, user.password);
-  if (!isValid) return res.status(401).json({ success: false, error: "Senha incorreta" });
-  
-  const addresses = await storage.getAddresses(user.id);
-  const defaultAddress = addresses.find(a => a.isDefault) || addresses[0];
-  
-  const { password: _, ...safeUser } = user;
-  res.json({ success: true, user: safeUser, address: defaultAddress || null });
 });
 
 app.post("/api/auth/motoboy-login", async (req, res) => {
-  const { whatsapp, password } = req.body;
-  
-  if (!password || !/^\d{6}$/.test(password)) {
-    return res.status(400).json({ success: false, error: "Senha deve ter exatamente 6 digitos" });
+  try {
+    const { whatsapp, password } = req.body;
+    
+    if (!whatsapp) {
+      return res.status(400).json({ success: false, error: "WhatsApp e obrigatorio" });
+    }
+    
+    if (!password || !/^\d{6}$/.test(password)) {
+      return res.status(400).json({ success: false, error: "Senha deve ter exatamente 6 digitos" });
+    }
+    
+    const motoboy = await storage.getMotoboyByWhatsapp(whatsapp);
+    if (!motoboy) return res.status(401).json({ success: false, error: "Motoboy nao encontrado" });
+    if (!motoboy.isActive) return res.status(403).json({ success: false, error: "Motoboy desativado" });
+    
+    const user = await storage.getUserByWhatsapp(whatsapp);
+    if (!user) return res.status(401).json({ success: false, error: "Usuario do motoboy nao encontrado" });
+    if (!user.password) return res.status(401).json({ success: false, error: "Senha nao cadastrada pelo administrador" });
+    
+    const isValid = await bcrypt.compare(password, user.password);
+    if (!isValid) return res.status(401).json({ success: false, error: "Senha incorreta" });
+    
+    const { password: _, ...safeUser } = user;
+    res.json({ success: true, user: { ...safeUser, role: 'motoboy' }, role: 'motoboy', motoboy });
+  } catch (error: any) {
+    console.error("Motoboy login error:", error);
+    res.status(500).json({ success: false, error: "Erro interno do servidor", details: error.message });
   }
-  
-  const motoboy = await storage.getMotoboyByWhatsapp(whatsapp);
-  if (!motoboy) return res.status(401).json({ success: false, error: "Motoboy nao encontrado" });
-  if (!motoboy.isActive) return res.status(403).json({ success: false, error: "Motoboy desativado" });
-  
-  const user = await storage.getUserByWhatsapp(whatsapp);
-  if (!user) return res.status(401).json({ success: false, error: "Usuario do motoboy nao encontrado" });
-  if (!user.password) return res.status(401).json({ success: false, error: "Senha nao cadastrada pelo administrador" });
-  
-  const isValid = await bcrypt.compare(password, user.password);
-  if (!isValid) return res.status(401).json({ success: false, error: "Senha incorreta" });
-  
-  const { password: _, ...safeUser } = user;
-  res.json({ success: true, user: { ...safeUser, role: 'motoboy' }, role: 'motoboy', motoboy });
 });
 
 app.post("/api/auth/register", async (req, res) => {

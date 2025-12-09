@@ -14,9 +14,10 @@ if (!databaseUrl) {
 
 export const pool = new Pool({ 
   connectionString: databaseUrl,
-  max: 10,
-  idleTimeoutMillis: 30000,
+  max: 1,
+  idleTimeoutMillis: 0,
   connectionTimeoutMillis: 10000,
+  ssl: { rejectUnauthorized: false },
 });
 
 pool.on('error', (err) => {
