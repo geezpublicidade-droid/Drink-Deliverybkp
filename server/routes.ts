@@ -4,7 +4,6 @@ import { storage } from "./storage";
 import bcrypt from "bcrypt";
 import multer from "multer";
 import { uploadFile, deleteFile, getStorageUrl } from "./supabase";
-import { buscarEnderecoPorCEP } from "./utils/delivery";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -373,22 +372,6 @@ export async function registerRoutes(
     const deleted = await storage.deleteAddress(req.params.id);
     if (!deleted) return res.status(404).json({ error: "Address not found" });
     res.status(204).send();
-  });
-
-  app.get("/api/cep/:cep", async (req, res) => {
-    const { cep } = req.params;
-    const cleanCep = cep.replace(/\D/g, '');
-    
-    if (cleanCep.length !== 8) {
-      return res.status(400).json({ error: "CEP deve ter 8 digitos" });
-    }
-    
-    const data = await buscarEnderecoPorCEP(cleanCep);
-    if (!data) {
-      return res.status(404).json({ error: "CEP nao encontrado" });
-    }
-    
-    res.json(data);
   });
 
   app.get("/api/categories", async (_req, res) => {
@@ -1150,71 +1133,6 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error generating stock report:", error);
       res.status(500).json({ error: "Failed to generate stock report" });
-    }
-  });
-
-  // Delivery calculation endpoint
-  app.post("/api/delivery/calculate", async (req, res) => {
-    try {
-      const { cep, street, number, neighborhood, city, state } = req.body;
-      
-      if (!cep) {
-        return res.status(400).json({ error: "CEP is required" });
-      }
-      
-      // Get store settings for coordinates
-      const settings = await storage.getSettings();
-      if (!settings) {
-        return res.status(500).json({ error: "Store settings not configured" });
-      }
-      
-      const storeLat = settings.storeLat ? parseFloat(settings.storeLat) : NaN;
-      const storeLng = settings.storeLng ? parseFloat(settings.storeLng) : NaN;
-      
-      if (!Number.isFinite(storeLat) || !Number.isFinite(storeLng)) {
-        // Store coordinates not configured or invalid
-        return res.status(500).json({ error: "Coordenadas da loja nao configuradas. Configure no painel administrativo." });
-      }
-      
-      // Import delivery utilities dynamically
-      const { calculateDelivery, calcularTaxaEntregaPorKm } = await import('./utils/delivery');
-      
-      const result = await calculateDelivery(
-        { cep, street, number, neighborhood, city, state },
-        storeLat,
-        storeLng
-      );
-      
-      if (!result) {
-        return res.status(400).json({ error: "Unable to calculate delivery. Please verify your address." });
-      }
-      
-      // Apply custom fee settings if available
-      const baseFee = settings.minDeliveryFee ? parseFloat(settings.minDeliveryFee) : 6.90;
-      const ratePerKm = settings.deliveryRatePerKm ? parseFloat(settings.deliveryRatePerKm) : 1.50;
-      const maxDistance = settings.maxDeliveryDistance ? parseFloat(settings.maxDeliveryDistance) : 50;
-      
-      // Check max delivery distance
-      if (result.distanciaKm > maxDistance) {
-        return res.status(400).json({ 
-          error: `Delivery distance exceeds maximum of ${maxDistance}km`,
-          distanciaKm: result.distanciaKm
-        });
-      }
-      
-      // Recalculate fee with store settings
-      const taxaEntrega = calcularTaxaEntregaPorKm(result.distanciaKm, baseFee, 3, ratePerKm);
-      
-      res.json({
-        distanciaKm: result.distanciaKm,
-        taxaEntrega,
-        tempoEstimadoMinutos: result.tempoEstimadoMinutos,
-        clienteLat: result.clienteLat,
-        clienteLng: result.clienteLng,
-      });
-    } catch (error) {
-      console.error("Delivery calculation error:", error);
-      res.status(500).json({ error: "Failed to calculate delivery" });
     }
   });
 
