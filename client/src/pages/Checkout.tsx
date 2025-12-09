@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { MapPin, CreditCard, Banknote, QrCode, Truck, Tag, ArrowLeft, Loader2, Copy, Check } from 'lucide-react';
+import { MapPin, CreditCard, Banknote, QrCode, Truck, Tag, ArrowLeft, Loader2, Copy, Check, Clock } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,14 @@ import { useAuth } from '@/lib/auth';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import type { Settings, PaymentMethod, Address } from '@shared/schema';
 import { PAYMENT_METHOD_LABELS } from '@shared/schema';
+
+interface DeliveryCalculation {
+  distanciaKm: number;
+  taxaEntrega: number;
+  tempoEstimadoMinutos: number;
+  clienteLat: number;
+  clienteLng: number;
+}
 
 export default function Checkout() {
   const [, setLocation] = useLocation();
@@ -37,14 +45,64 @@ export default function Checkout() {
   const [zipCode, setZipCode] = useState('');
   const [notes, setNotes] = useState('');
 
+  // Delivery calculation state
+  const [deliveryCalc, setDeliveryCalc] = useState<DeliveryCalculation | null>(null);
+  const [isCalculatingDelivery, setIsCalculatingDelivery] = useState(false);
+  const [deliveryError, setDeliveryError] = useState<string | null>(null);
+
   const { data: settings } = useQuery<Settings>({
     queryKey: ['/api/settings'],
   });
 
-  const deliveryRate = Number(settings?.deliveryRatePerKm ?? 1.25);
-  const minDeliveryFee = Number(settings?.minDeliveryFee ?? 5);
-  const estimatedDistance = 5;
-  const deliveryFee = Math.max(estimatedDistance * deliveryRate, minDeliveryFee);
+  // Calculate delivery when address changes
+  const calculateDeliveryFee = async (addressData: {
+    cep: string;
+    street: string;
+    number: string;
+    neighborhood: string;
+    city: string;
+    state: string;
+  }) => {
+    setIsCalculatingDelivery(true);
+    setDeliveryError(null);
+    
+    try {
+      const response = await apiRequest('POST', '/api/delivery/calculate', addressData);
+      const data = await response.json();
+      
+      if (response.ok) {
+        setDeliveryCalc(data);
+        setDeliveryError(null);
+      } else {
+        setDeliveryError(data.error || 'Erro ao calcular entrega');
+        setDeliveryCalc(null);
+      }
+    } catch (error) {
+      setDeliveryError('Erro ao calcular entrega');
+      setDeliveryCalc(null);
+    } finally {
+      setIsCalculatingDelivery(false);
+    }
+  };
+
+  // Calculate delivery when existing address is available
+  useEffect(() => {
+    if (address && address.zipCode) {
+      calculateDeliveryFee({
+        cep: address.zipCode,
+        street: address.street,
+        number: address.number,
+        neighborhood: address.neighborhood,
+        city: address.city,
+        state: address.state,
+      });
+    }
+  }, [address]);
+
+  // Use calculated delivery fee or fallback to minimum
+  const deliveryFee = deliveryCalc?.taxaEntrega ?? Number(settings?.minDeliveryFee ?? 6.90);
+  const estimatedDistance = deliveryCalc?.distanciaKm ?? 0;
+  const estimatedTime = deliveryCalc?.tempoEstimadoMinutos ?? 0;
   
   const totalAfterDiscount = subtotal - comboDiscount;
   const total = totalAfterDiscount + deliveryFee;
@@ -68,6 +126,8 @@ export default function Checkout() {
         total,
         paymentMethod,
         changeFor: paymentMethod === 'cash' && needsChange ? Number(changeFor) : null,
+        customerLat: deliveryCalc?.clienteLat?.toString() || null,
+        customerLng: deliveryCalc?.clienteLng?.toString() || null,
       };
       return apiRequest('POST', '/api/orders', orderData);
     },
@@ -103,7 +163,17 @@ export default function Checkout() {
     onSuccess: (data: Address) => {
       setAddress(data);
       queryClient.invalidateQueries({ queryKey: ['/api/addresses'] });
-      toast({ title: 'Endereco salvo!', description: 'Agora voce pode finalizar seu pedido' });
+      toast({ title: 'Endereco salvo!', description: 'Calculando taxa de entrega...' });
+      
+      // Calculate delivery fee for the newly saved address
+      calculateDeliveryFee({
+        cep: data.zipCode,
+        street: data.street,
+        number: data.number,
+        neighborhood: data.neighborhood,
+        city: data.city,
+        state: data.state,
+      });
     },
     onError: () => {
       toast({ title: 'Erro ao salvar endereco', variant: 'destructive' });
@@ -433,9 +503,35 @@ export default function Checkout() {
                     <span className="text-muted-foreground flex items-center gap-1">
                       <Truck className="h-3 w-3" />
                       Taxa de entrega
+                      {estimatedDistance > 0 && (
+                        <span className="text-xs">({estimatedDistance.toFixed(1)} km)</span>
+                      )}
                     </span>
-                    <span className="text-foreground">{formatPrice(deliveryFee)}</span>
+                    {isCalculatingDelivery ? (
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Calculando...
+                      </span>
+                    ) : (
+                      <span className="text-foreground">{formatPrice(deliveryFee)}</span>
+                    )}
                   </div>
+
+                  {estimatedTime > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        Tempo estimado
+                      </span>
+                      <span className="text-foreground">{estimatedTime} min</span>
+                    </div>
+                  )}
+
+                  {deliveryError && (
+                    <div className="text-destructive text-xs mt-1">
+                      {deliveryError}
+                    </div>
+                  )}
                 </div>
 
                 <Separator className="bg-primary/20" />
@@ -448,13 +544,17 @@ export default function Checkout() {
                 <Button
                   className="w-full bg-primary text-primary-foreground font-semibold py-6"
                   onClick={() => createOrderMutation.mutate()}
-                  disabled={createOrderMutation.isPending || needsAddress}
+                  disabled={createOrderMutation.isPending || needsAddress || isCalculatingDelivery || (!deliveryCalc && !deliveryError)}
                   data-testid="button-place-order"
                 >
                   {createOrderMutation.isPending ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : needsAddress ? (
                     'Adicione um endereco primeiro'
+                  ) : isCalculatingDelivery ? (
+                    'Calculando entrega...'
+                  ) : !deliveryCalc && !deliveryError ? (
+                    'Aguardando calculo de entrega...'
                   ) : (
                     `Confirmar Pedido - ${formatPrice(total)}`
                   )}

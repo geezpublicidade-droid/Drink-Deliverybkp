@@ -1136,6 +1136,71 @@ export async function registerRoutes(
     }
   });
 
+  // Delivery calculation endpoint
+  app.post("/api/delivery/calculate", async (req, res) => {
+    try {
+      const { cep, street, number, neighborhood, city, state } = req.body;
+      
+      if (!cep) {
+        return res.status(400).json({ error: "CEP is required" });
+      }
+      
+      // Get store settings for coordinates
+      const settings = await storage.getSettings();
+      if (!settings) {
+        return res.status(500).json({ error: "Store settings not configured" });
+      }
+      
+      const storeLat = settings.storeLat ? parseFloat(settings.storeLat) : NaN;
+      const storeLng = settings.storeLng ? parseFloat(settings.storeLng) : NaN;
+      
+      if (!Number.isFinite(storeLat) || !Number.isFinite(storeLng)) {
+        // Store coordinates not configured or invalid
+        return res.status(500).json({ error: "Coordenadas da loja nao configuradas. Configure no painel administrativo." });
+      }
+      
+      // Import delivery utilities dynamically
+      const { calculateDelivery, calcularTaxaEntregaPorKm } = await import('./utils/delivery');
+      
+      const result = await calculateDelivery(
+        { cep, street, number, neighborhood, city, state },
+        storeLat,
+        storeLng
+      );
+      
+      if (!result) {
+        return res.status(400).json({ error: "Unable to calculate delivery. Please verify your address." });
+      }
+      
+      // Apply custom fee settings if available
+      const baseFee = settings.minDeliveryFee ? parseFloat(settings.minDeliveryFee) : 6.90;
+      const ratePerKm = settings.deliveryRatePerKm ? parseFloat(settings.deliveryRatePerKm) : 1.50;
+      const maxDistance = settings.maxDeliveryDistance ? parseFloat(settings.maxDeliveryDistance) : 50;
+      
+      // Check max delivery distance
+      if (result.distanciaKm > maxDistance) {
+        return res.status(400).json({ 
+          error: `Delivery distance exceeds maximum of ${maxDistance}km`,
+          distanciaKm: result.distanciaKm
+        });
+      }
+      
+      // Recalculate fee with store settings
+      const taxaEntrega = calcularTaxaEntregaPorKm(result.distanciaKm, baseFee, 3, ratePerKm);
+      
+      res.json({
+        distanciaKm: result.distanciaKm,
+        taxaEntrega,
+        tempoEstimadoMinutos: result.tempoEstimadoMinutos,
+        clienteLat: result.clienteLat,
+        clienteLng: result.clienteLng,
+      });
+    } catch (error) {
+      console.error("Delivery calculation error:", error);
+      res.status(500).json({ error: "Failed to calculate delivery" });
+    }
+  });
+
   // Low Stock Suggestions - Products with stock below threshold
   app.get("/api/stock/low-stock", async (req, res) => {
     try {
