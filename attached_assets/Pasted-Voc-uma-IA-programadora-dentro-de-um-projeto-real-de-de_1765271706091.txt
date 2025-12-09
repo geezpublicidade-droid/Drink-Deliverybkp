@@ -1,0 +1,94 @@
+Você é uma IA programadora dentro de um projeto real de delivery em funcionamento no Replit. O objetivo é implementar cálculo completo de taxa de entrega sem usar Google Maps ou qualquer serviço que exija faturamento, usando apenas serviços gratuitos e cálculo direto no backend. Faça todos os ajustes necessários no backend, frontend e banco de dados (Supabase) para que o sistema passe a calcular automaticamente distância e taxa de entrega com base no endereço do cliente, usando ViaCEP + Nominatim + fórmula de Haversine.
+
+O projeto consiste em um frontend React, backend Node/Express e Supabase. Tudo já funciona, incluindo criação de pedidos, autenticação, itens, carrinho e finalização. O que falta é a geolocalização e cálculo de taxa de entrega.
+
+As regras para a implementação são:
+
+Não usar Google Maps ou qualquer API que exija conta de faturamento.
+Use apenas:
+
+ViaCEP: https://viacep.com.br/ws/{CEP}/json/
+
+Nominatim (OpenStreetMap): https://nominatim.openstreetmap.org/search?q={endereco}&format=json&addressdetails=1&limit=1&countrycodes=br
+
+Fórmula de Haversine para calcular distância no backend.
+
+Crie no backend (pode ser em uma pasta utils/ ou equivalente) as funções:
+
+buscarEnderecoPorCEP(cep) → chama ViaCEP, normaliza CEP, retorna logradouro, bairro, localidade, uf.
+
+geocodificarEnderecoNominatim(enderecoCompleto) → chama Nominatim usando fetch com cabeçalho User-Agent: delivery-app-andre/1.0, devolve { lat, lng }.
+
+calcularDistanciaKm(lat1, lon1, lat2, lon2) usando fórmula de Haversine.
+
+calcularTaxaEntregaPorKm(distanciaKm) com a regra: taxa base de R$ 6,90 para até 3 km; acima disso, R$ 1,50 por km adicional; arredondar com duas casas decimais.
+
+Crie um arquivo ou rota inicial para configurar o endereço da loja. Pegue o endereço da loja (use o valor atualmente configurado no projeto, ou crie um arquivo config/store.js com os dados) e geocodifique uma única vez com Nominatim. Salve lojaLat e lojaLng em um arquivo de configuração, variável de ambiente, ou tabela de configuração do Supabase. Todas as rotas futuras devem usar essas coordenadas fixas.
+
+Crie no backend uma rota REST:
+POST /api/delivery/calculate
+O corpo deve conter os dados do endereço:
+{ "cep": "...", "street": "...", "number": "...", "neighborhood": "...", "city": "...", "state": "..." }
+Regras da rota:
+
+Validar os campos obrigatórios.
+
+Se street/bairro/… não vierem, completar usando ViaCEP.
+
+Montar enderecoCompleto como: "logradouro, número, bairro, cidade, estado, Brasil".
+
+Geocodificar com Nominatim.
+
+Pegar as coordenadas da loja vindas da configuração.
+
+Calcular a distância usando Haversine.
+
+Calcular taxa usando calcularTaxaEntregaPorKm.
+
+Criar campo de tempo estimado simples: distanciaKm * 4 (em minutos).
+
+Retornar JSON:
+{ "distanciaKm": X, "taxaEntrega": Y, "tempoEstimadoMinutos": Z, "clienteLat": LAT, "clienteLng": LNG }.
+
+Ajustar o Supabase na tabela de pedidos (orders/pedidos). Se não existirem, crie as colunas:
+
+delivery_distance_km (numeric/double)
+
+delivery_fee (numeric)
+
+customer_lat (numeric)
+
+customer_lng (numeric)
+
+Ajustar no backend a rota que cria o pedido. Antes de salvar:
+
+Se o frontend não enviar taxa/dados completos, chamar internamente a função de cálculo de entrega.
+
+Preencher automaticamente no pedido:
+delivery_distance_km, delivery_fee, customer_lat, customer_lng.
+
+Incluir a taxa de entrega no valor final do pedido.
+
+Retornar esses valores no JSON de resposta.
+
+Ajustar o frontend React (tela de checkout):
+
+Quando o cliente preencher CEP ou endereço, enviar requisição para /api/delivery/calculate.
+
+Exibir taxa de entrega, distância e tempo estimado antes de finalizar o pedido.
+
+No momento de concluir o pedido, enviar endereço e taxa para o backend.
+
+O backend deve sempre recalcular ou validar a taxa final antes de salvar.
+
+Implementar tratamento de erros amigável:
+
+Se Nominatim falhar, retorno HTTP 400 com mensagem: “Não foi possível calcular a taxa de entrega para esse endereço.”
+
+Se ViaCEP falhar, mesma lógica.
+
+Não deixar o sistema travar — sempre retornar resposta clara.
+
+Evitar chamadas repetidas desnecessárias ao Nominatim. Se possível, implemente cache simples em memória para endereços já consultados.
+
+Comentar o código de forma clara, explicando propósito de cada função, para permitir ajustes futuros pelo usuário.
