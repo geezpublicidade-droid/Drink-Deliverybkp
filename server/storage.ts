@@ -3,7 +3,7 @@ import { eq, desc, inArray, and, gte, lte } from "drizzle-orm";
 import { db } from "./db";
 import { 
   users, addresses, categories, products, orders, orderItems, 
-  banners, motoboys, stockLogs, settings
+  banners, motoboys, stockLogs, settings, deliveryZones, neighborhoods
 } from "@shared/schema";
 import bcrypt from "bcrypt";
 import type { 
@@ -16,7 +16,9 @@ import type {
   Banner, InsertBanner,
   Motoboy, InsertMotoboy,
   StockLog, InsertStockLog,
-  Settings, InsertSettings
+  Settings, InsertSettings,
+  DeliveryZone, InsertDeliveryZone,
+  Neighborhood, InsertNeighborhood
 } from "@shared/schema";
 
 export interface IStorage {
@@ -79,6 +81,19 @@ export interface IStorage {
   updateSettings(settings: Partial<InsertSettings>): Promise<Settings>;
 
   createStockLog(log: InsertStockLog): Promise<StockLog>;
+
+  getDeliveryZones(): Promise<DeliveryZone[]>;
+  getDeliveryZone(id: string): Promise<DeliveryZone | undefined>;
+  createDeliveryZone(zone: InsertDeliveryZone): Promise<DeliveryZone>;
+  updateDeliveryZone(id: string, zone: Partial<InsertDeliveryZone>): Promise<DeliveryZone | undefined>;
+  deleteDeliveryZone(id: string): Promise<boolean>;
+
+  getNeighborhoods(): Promise<Neighborhood[]>;
+  getNeighborhoodsByZone(zoneId: string): Promise<Neighborhood[]>;
+  getNeighborhood(id: string): Promise<Neighborhood | undefined>;
+  createNeighborhood(neighborhood: InsertNeighborhood): Promise<Neighborhood>;
+  updateNeighborhood(id: string, neighborhood: Partial<InsertNeighborhood>): Promise<Neighborhood | undefined>;
+  deleteNeighborhood(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -483,6 +498,74 @@ export class DatabaseStorage implements IStorage {
     const id = randomUUID();
     const [log] = await db.insert(stockLogs).values({ id, ...insertLog }).returning();
     return log;
+  }
+
+  async getDeliveryZones(): Promise<DeliveryZone[]> {
+    const result = await db.select().from(deliveryZones);
+    return result.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  }
+
+  async getDeliveryZone(id: string): Promise<DeliveryZone | undefined> {
+    const [zone] = await db.select().from(deliveryZones).where(eq(deliveryZones.id, id));
+    return zone || undefined;
+  }
+
+  async createDeliveryZone(insertZone: InsertDeliveryZone): Promise<DeliveryZone> {
+    const id = randomUUID();
+    const [zone] = await db.insert(deliveryZones).values({
+      id,
+      code: insertZone.code,
+      name: insertZone.name,
+      description: insertZone.description ?? null,
+      fee: insertZone.fee,
+      sortOrder: insertZone.sortOrder ?? 0,
+      isActive: insertZone.isActive ?? true,
+    }).returning();
+    return zone;
+  }
+
+  async updateDeliveryZone(id: string, updates: Partial<InsertDeliveryZone>): Promise<DeliveryZone | undefined> {
+    const [zone] = await db.update(deliveryZones).set(updates).where(eq(deliveryZones.id, id)).returning();
+    return zone || undefined;
+  }
+
+  async deleteDeliveryZone(id: string): Promise<boolean> {
+    await db.delete(deliveryZones).where(eq(deliveryZones.id, id));
+    return true;
+  }
+
+  async getNeighborhoods(): Promise<Neighborhood[]> {
+    return await db.select().from(neighborhoods);
+  }
+
+  async getNeighborhoodsByZone(zoneId: string): Promise<Neighborhood[]> {
+    return await db.select().from(neighborhoods).where(eq(neighborhoods.zoneId, zoneId));
+  }
+
+  async getNeighborhood(id: string): Promise<Neighborhood | undefined> {
+    const [neighborhood] = await db.select().from(neighborhoods).where(eq(neighborhoods.id, id));
+    return neighborhood || undefined;
+  }
+
+  async createNeighborhood(insertNeighborhood: InsertNeighborhood): Promise<Neighborhood> {
+    const id = randomUUID();
+    const [neighborhood] = await db.insert(neighborhoods).values({
+      id,
+      name: insertNeighborhood.name,
+      zoneId: insertNeighborhood.zoneId,
+      isActive: insertNeighborhood.isActive ?? true,
+    }).returning();
+    return neighborhood;
+  }
+
+  async updateNeighborhood(id: string, updates: Partial<InsertNeighborhood>): Promise<Neighborhood | undefined> {
+    const [neighborhood] = await db.update(neighborhoods).set(updates).where(eq(neighborhoods.id, id)).returning();
+    return neighborhood || undefined;
+  }
+
+  async deleteNeighborhood(id: string): Promise<boolean> {
+    await db.delete(neighborhoods).where(eq(neighborhoods.id, id));
+    return true;
   }
 }
 

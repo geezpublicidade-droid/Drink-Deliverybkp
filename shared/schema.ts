@@ -59,6 +59,9 @@ export const orders = pgTable("orders", {
   status: text("status").notNull().default("pending"),
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
   deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull(),
+  originalDeliveryFee: decimal("original_delivery_fee", { precision: 10, scale: 2 }),
+  deliveryFeeAdjusted: boolean("delivery_fee_adjusted").default(false),
+  deliveryFeeAdjustedAt: timestamp("delivery_fee_adjusted_at"),
   deliveryDistance: decimal("delivery_distance", { precision: 10, scale: 2 }),
   discount: decimal("discount", { precision: 10, scale: 2 }).default("0"),
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
@@ -129,6 +132,23 @@ export const settings = pgTable("settings", {
   isOpen: boolean("is_open").default(true),
 });
 
+export const deliveryZones = pgTable("delivery_zones", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  code: varchar("code", { length: 5 }).notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description"),
+  fee: decimal("fee", { precision: 10, scale: 2 }).notNull(),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+});
+
+export const neighborhoods = pgTable("neighborhoods", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  name: text("name").notNull(),
+  zoneId: varchar("zone_id", { length: 36 }).notNull().references(() => deliveryZones.id),
+  isActive: boolean("is_active").default(true),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertAddressSchema = createInsertSchema(addresses).omit({ id: true });
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true, createdAt: true });
@@ -139,6 +159,8 @@ export const insertBannerSchema = createInsertSchema(banners).omit({ id: true, c
 export const insertMotoboySchema = createInsertSchema(motoboys).omit({ id: true, createdAt: true });
 export const insertStockLogSchema = createInsertSchema(stockLogs).omit({ id: true, createdAt: true });
 export const insertSettingsSchema = createInsertSchema(settings).omit({ id: true });
+export const insertDeliveryZoneSchema = createInsertSchema(deliveryZones).omit({ id: true });
+export const insertNeighborhoodSchema = createInsertSchema(neighborhoods).omit({ id: true });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -160,6 +182,10 @@ export type InsertStockLog = z.infer<typeof insertStockLogSchema>;
 export type StockLog = typeof stockLogs.$inferSelect;
 export type InsertSettings = z.infer<typeof insertSettingsSchema>;
 export type Settings = typeof settings.$inferSelect;
+export type InsertDeliveryZone = z.infer<typeof insertDeliveryZoneSchema>;
+export type DeliveryZone = typeof deliveryZones.$inferSelect;
+export type InsertNeighborhood = z.infer<typeof insertNeighborhoodSchema>;
+export type Neighborhood = typeof neighborhoods.$inferSelect;
 
 export type CartItem = {
   productId: string;
