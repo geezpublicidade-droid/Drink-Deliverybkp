@@ -6,8 +6,32 @@ import { uploadFile, deleteFile } from "../server/supabase";
 
 const app = express();
 
+// Initialize database seed on cold start
+let isSeeded = false;
+async function ensureSeeded() {
+  if (!isSeeded) {
+    await seedDatabase();
+    isSeeded = true;
+  }
+}
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Middleware to ensure database is seeded
+app.use(async (_req, _res, next) => {
+  await ensureSeeded();
+  next();
+});
+
+// SSE endpoint - Not supported in serverless environment
+app.get("/api/orders/sse", (_req, res) => {
+  res.status(501).json({
+    error: "SSE not supported",
+    message: "Server-Sent Events (SSE) nao sao suportados em ambiente serverless. Use polling para atualizacoes em tempo real.",
+    suggestion: "Configure um intervalo de polling de 5-10 segundos para verificar atualizacoes de pedidos."
+  });
+});
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -322,6 +346,25 @@ app.delete("/api/categories/:id", async (req, res) => {
   }
 });
 
+app.patch("/api/categories/reorder", async (req, res) => {
+  const { items } = req.body;
+  if (!Array.isArray(items)) {
+    return res.status(400).json({ error: "items array required" });
+  }
+  
+  try {
+    for (const item of items) {
+      if (item.id && typeof item.sortOrder === 'number') {
+        await storage.updateCategory(item.id, { sortOrder: item.sortOrder });
+      }
+    }
+    const categories = await storage.getCategories();
+    res.json(categories);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to reorder categories" });
+  }
+});
+
 // Products
 app.get("/api/products", async (_req, res) => {
   const products = await storage.getProducts();
@@ -393,6 +436,106 @@ app.post("/api/products/reorder", async (req, res) => {
     res.json(products);
   } catch (error) {
     res.status(500).json({ error: "Failed to reorder products" });
+  }
+});
+
+// Import products from CSV
+app.post("/api/products/import-csv", uploadCSV.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Nenhum arquivo enviado" });
+    }
+
+    const csvContent = req.file.buffer.toString('utf-8');
+    const lines = csvContent.split('\n').filter(line => line.trim());
+    
+    if (lines.length < 2) {
+      return res.status(400).json({ error: "CSV vazio ou sem dados" });
+    }
+
+    const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const produtoIdx = header.findIndex(h => h === 'produto' || h === 'nome' || h === 'name');
+    const categoriaIdx = header.findIndex(h => h === 'categoria' || h === 'category');
+    const precoCompraIdx = header.findIndex(h => h === 'precocompra' || h === 'costprice' || h === 'custo');
+    const precoVendaIdx = header.findIndex(h => h === 'precovenda' || h === 'saleprice' || h === 'preco');
+    const estoqueIdx = header.findIndex(h => h === 'quantidadeestoque' || h === 'estoque' || h === 'stock');
+
+    if (produtoIdx === -1) {
+      return res.status(400).json({ error: "Coluna 'Produto' nao encontrada no CSV" });
+    }
+
+    const existingCategories = await storage.getCategories();
+    const categoryMap = new Map(existingCategories.map(c => [c.name.toLowerCase(), c.id]));
+
+    let imported = 0;
+    let errors: string[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+      
+      const productName = values[produtoIdx];
+      if (!productName) {
+        errors.push(`Linha ${i + 1}: Nome do produto vazio`);
+        continue;
+      }
+
+      let categoryId: string | null = null;
+      if (categoriaIdx !== -1 && values[categoriaIdx]) {
+        const categoryName = values[categoriaIdx];
+        const existingCategoryId = categoryMap.get(categoryName.toLowerCase());
+        
+        if (existingCategoryId) {
+          categoryId = existingCategoryId;
+        } else {
+          const newCategory = await storage.createCategory({
+            name: categoryName,
+            iconUrl: null,
+            isActive: true,
+          });
+          categoryMap.set(categoryName.toLowerCase(), newCategory.id);
+          categoryId = newCategory.id;
+        }
+      }
+
+      const costPrice = precoCompraIdx !== -1 ? parseFloat(values[precoCompraIdx]) || 0 : 0;
+      const salePrice = precoVendaIdx !== -1 ? parseFloat(values[precoVendaIdx]) || 0 : 0;
+      const stock = estoqueIdx !== -1 ? parseInt(values[estoqueIdx]) || 0 : 0;
+      const profitMargin = costPrice > 0 ? ((salePrice - costPrice) / costPrice) * 100 : 0;
+
+      try {
+        const productData: any = {
+          name: productName,
+          description: null,
+          costPrice: costPrice.toString(),
+          salePrice: salePrice.toString(),
+          profitMargin: profitMargin.toFixed(2),
+          stock,
+          imageUrl: null,
+          productType: null,
+          isActive: true,
+        };
+        if (categoryId) {
+          productData.categoryId = categoryId;
+        }
+        await storage.createProduct(productData);
+        imported++;
+      } catch (err) {
+        errors.push(`Linha ${i + 1}: Erro ao criar produto "${productName}"`);
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      imported, 
+      errors: errors.length > 0 ? errors : undefined,
+      message: `${imported} produtos importados com sucesso${errors.length > 0 ? `, ${errors.length} erros` : ''}`
+    });
+  } catch (error: any) {
+    console.error("Error importing CSV:", error);
+    res.status(500).json({ error: "Erro ao processar CSV: " + error.message });
   }
 });
 
@@ -489,6 +632,55 @@ app.patch("/api/orders/:id", async (req, res) => {
   res.json(order);
 });
 
+app.patch("/api/orders/:id/status", async (req, res) => {
+  const { status } = req.body;
+  const order = await storage.getOrder(req.params.id);
+  if (!order) return res.status(404).json({ error: "Order not found" });
+
+  const transitions = order.orderType === 'counter' ? COUNTER_ORDER_TRANSITIONS : VALID_STATUS_TRANSITIONS;
+  if (!isValidStatusTransition(order.status, status, order.orderType)) {
+    return res.status(400).json({ 
+      error: `Transicao invalida: ${order.status} -> ${status}`,
+      currentStatus: order.status,
+      allowedTransitions: transitions[order.status] || []
+    });
+  }
+
+  const updates: any = { status };
+  const now = new Date();
+
+  switch (status) {
+    case "accepted": updates.acceptedAt = now; break;
+    case "preparing": updates.preparingAt = now; break;
+    case "ready": updates.readyAt = now; break;
+    case "dispatched": updates.dispatchedAt = now; break;
+    case "arrived": updates.arrivedAt = now; break;
+    case "delivered": updates.deliveredAt = now; break;
+  }
+
+  const updated = await storage.updateOrder(req.params.id, updates);
+  res.json(updated);
+});
+
+app.patch("/api/orders/:id/assign", async (req, res) => {
+  const { motoboyId } = req.body;
+  const order = await storage.getOrder(req.params.id);
+  if (!order) return res.status(404).json({ error: "Order not found" });
+
+  if (order.status !== 'ready') {
+    return res.status(400).json({ 
+      error: `Pedido deve estar com status 'pronto' para atribuir motoboy. Status atual: ${order.status}` 
+    });
+  }
+
+  const updated = await storage.updateOrder(req.params.id, { 
+    motoboyId, 
+    status: "dispatched",
+    dispatchedAt: new Date()
+  });
+  res.json(updated);
+});
+
 app.delete("/api/orders/:id", async (req, res) => {
   const order = await storage.getOrder(req.params.id);
   if (!order) return res.status(404).json({ error: "Order not found" });
@@ -536,20 +728,130 @@ app.get("/api/motoboys/:id", async (req, res) => {
   res.json(motoboy);
 });
 
+app.get("/api/motoboys/:id/details", async (req, res) => {
+  const motoboy = await storage.getMotoboy(req.params.id);
+  if (!motoboy) return res.status(404).json({ error: "Motoboy not found" });
+  
+  const user = await storage.getUserByWhatsapp(motoboy.whatsapp);
+  const hasPassword = user?.password ? true : false;
+  
+  res.json({
+    ...motoboy,
+    hasPassword,
+    userId: user?.id || null,
+  });
+});
+
+app.get("/api/motoboys/:id/orders", async (req, res) => {
+  const { id } = req.params;
+  const { startDate, endDate } = req.query;
+  
+  const motoboy = await storage.getMotoboy(id);
+  if (!motoboy) return res.status(404).json({ error: "Motoboy not found" });
+  
+  const start = startDate && typeof startDate === 'string' ? new Date(startDate) : undefined;
+  const end = endDate && typeof endDate === 'string' ? new Date(endDate) : undefined;
+  
+  const orders = await storage.getOrdersByMotoboy(id, start, end);
+  res.json(orders);
+});
+
 app.post("/api/motoboys", async (req, res) => {
-  const motoboy = await storage.createMotoboy(req.body);
+  const { name, whatsapp, photoUrl, isActive, password } = req.body;
+  
+  if (password && !/^\d{6}$/.test(password)) {
+    return res.status(400).json({ error: "Senha deve ter exatamente 6 digitos numericos" });
+  }
+  
+  const existingMotoboy = await storage.getMotoboyByWhatsapp(whatsapp);
+  if (existingMotoboy) {
+    return res.status(400).json({ error: "Ja existe um motoboy com este WhatsApp" });
+  }
+  
+  const motoboy = await storage.createMotoboy({ name, whatsapp, photoUrl, isActive });
+  
+  let user = await storage.getUserByWhatsapp(whatsapp);
+  if (!user) {
+    const hashedPassword = password ? await bcrypt.hash(password, SALT_ROUNDS) : null;
+    user = await storage.createUser({
+      name,
+      whatsapp,
+      role: "motoboy",
+      password: hashedPassword,
+    });
+  } else if (password) {
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+    await storage.updateUser(user.id, { 
+      password: hashedPassword,
+      role: "motoboy",
+      name,
+    });
+  }
+  
   res.status(201).json(motoboy);
 });
 
 app.patch("/api/motoboys/:id", async (req, res) => {
-  const motoboy = await storage.updateMotoboy(req.params.id, req.body);
-  if (!motoboy) return res.status(404).json({ error: "Motoboy not found" });
+  const { name, whatsapp, photoUrl, isActive, password } = req.body;
+  
+  if (password && !/^\d{6}$/.test(password)) {
+    return res.status(400).json({ error: "Senha deve ter exatamente 6 digitos numericos" });
+  }
+  
+  const existingMotoboy = await storage.getMotoboy(req.params.id);
+  if (!existingMotoboy) return res.status(404).json({ error: "Motoboy not found" });
+  
+  if (whatsapp && whatsapp !== existingMotoboy.whatsapp) {
+    const motoboyWithWhatsapp = await storage.getMotoboyByWhatsapp(whatsapp);
+    if (motoboyWithWhatsapp && motoboyWithWhatsapp.id !== req.params.id) {
+      return res.status(400).json({ error: "Ja existe outro motoboy com este WhatsApp" });
+    }
+  }
+  
+  const motoboyData: any = {};
+  if (name !== undefined) motoboyData.name = name;
+  if (whatsapp !== undefined) motoboyData.whatsapp = whatsapp;
+  if (photoUrl !== undefined) motoboyData.photoUrl = photoUrl;
+  if (isActive !== undefined) motoboyData.isActive = isActive;
+  
+  const motoboy = await storage.updateMotoboy(req.params.id, motoboyData);
+  
+  const oldUser = await storage.getUserByWhatsapp(existingMotoboy.whatsapp);
+  if (oldUser) {
+    const userUpdates: any = {};
+    if (name !== undefined) userUpdates.name = name;
+    if (whatsapp !== undefined) userUpdates.whatsapp = whatsapp;
+    if (password) {
+      userUpdates.password = await bcrypt.hash(password, SALT_ROUNDS);
+    }
+    if (Object.keys(userUpdates).length > 0) {
+      await storage.updateUser(oldUser.id, userUpdates);
+    }
+  } else if (password || whatsapp) {
+    const hashedPassword = password ? await bcrypt.hash(password, SALT_ROUNDS) : null;
+    await storage.createUser({
+      name: name || existingMotoboy.name,
+      whatsapp: whatsapp || existingMotoboy.whatsapp,
+      role: "motoboy",
+      password: hashedPassword,
+    });
+  }
+  
   res.json(motoboy);
 });
 
 app.delete("/api/motoboys/:id", async (req, res) => {
+  const motoboy = await storage.getMotoboy(req.params.id);
+  if (!motoboy) return res.status(404).json({ error: "Motoboy not found" });
+  
   const deleted = await storage.deleteMotoboy(req.params.id);
   if (!deleted) return res.status(404).json({ error: "Motoboy not found" });
+  
+  const user = await storage.getUserByWhatsapp(motoboy.whatsapp);
+  if (user && user.role === 'motoboy') {
+    await storage.updateUser(user.id, { role: 'customer' });
+  }
+  
   res.status(204).send();
 });
 
