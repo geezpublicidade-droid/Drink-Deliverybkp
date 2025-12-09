@@ -60,6 +60,8 @@ export const orders = pgTable("orders", {
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
   deliveryFee: decimal("delivery_fee", { precision: 10, scale: 2 }).notNull(),
   deliveryDistance: decimal("delivery_distance", { precision: 10, scale: 2 }),
+  customerLat: decimal("customer_lat", { precision: 10, scale: 7 }),
+  customerLng: decimal("customer_lng", { precision: 10, scale: 7 }),
   discount: decimal("discount", { precision: 10, scale: 2 }).default("0"),
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
   paymentMethod: text("payment_method").notNull(),
