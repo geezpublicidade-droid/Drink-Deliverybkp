@@ -104,13 +104,12 @@ export function ProductCard({ product }: ProductCardProps) {
             </div>
           ) : (
             <Button
-              size="sm"
+              size="icon"
               className="bg-primary text-primary-foreground"
               onClick={() => addItem(product)}
               data-testid={`button-add-${product.id}`}
             >
-              <Plus className="h-4 w-4 mr-1" />
-              Adicionar
+              <Plus className="h-4 w-4" />
             </Button>
           )}
         </div>
