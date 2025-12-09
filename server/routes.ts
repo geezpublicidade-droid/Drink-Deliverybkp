@@ -397,9 +397,23 @@ export async function registerRoutes(
   });
 
   app.delete("/api/categories/:id", async (req, res) => {
-    const deleted = await storage.deleteCategory(req.params.id);
-    if (!deleted) return res.status(404).json({ error: "Category not found" });
-    res.status(204).send();
+    try {
+      const products = await storage.getProductsByCategory(req.params.id);
+      if (products.length > 0) {
+        return res.status(400).json({ 
+          error: `Nao e possivel excluir categoria com ${products.length} produto(s) vinculado(s). Remova ou mova os produtos primeiro.` 
+        });
+      }
+      const deleted = await storage.deleteCategory(req.params.id);
+      if (!deleted) return res.status(404).json({ error: "Category not found" });
+      res.status(204).send();
+    } catch (error: any) {
+      console.error("Error deleting category:", error);
+      if (error.code === '23503') {
+        return res.status(400).json({ error: "Categoria possui produtos vinculados" });
+      }
+      res.status(500).json({ error: "Erro ao excluir categoria" });
+    }
   });
 
   app.get("/api/products", async (_req, res) => {
@@ -516,10 +530,9 @@ export async function registerRoutes(
         const profitMargin = costPrice > 0 ? ((salePrice - costPrice) / costPrice) * 100 : 0;
 
         try {
-          await storage.createProduct({
+          const productData: any = {
             name: productName,
             description: null,
-            categoryId: categoryId || undefined,
             costPrice: costPrice.toString(),
             salePrice: salePrice.toString(),
             profitMargin: profitMargin.toFixed(2),
@@ -527,7 +540,11 @@ export async function registerRoutes(
             imageUrl: null,
             productType: null,
             isActive: true,
-          });
+          };
+          if (categoryId) {
+            productData.categoryId = categoryId;
+          }
+          await storage.createProduct(productData);
           imported++;
         } catch (err) {
           errors.push(`Linha ${i + 1}: Erro ao criar produto "${productName}"`);
