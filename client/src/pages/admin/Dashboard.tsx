@@ -3534,9 +3534,16 @@ function ZonasTab() {
   const handleNeighborhoodSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const zoneId = formData.get('zoneId') as string;
+    
+    if (!zoneId) {
+      toast({ title: 'Selecione uma zona', variant: 'destructive' });
+      return;
+    }
+    
     const data = {
       name: formData.get('name') as string,
-      zoneId: formData.get('zoneId') as string,
+      zoneId,
       isActive: formData.get('isActive') === 'on',
     };
 
@@ -3790,7 +3797,8 @@ function ZonasTab() {
             </div>
             <div>
               <Label htmlFor="zoneId">Zona</Label>
-              <Select name="zoneId" defaultValue={selectedZoneForNeighborhood} required>
+              <input type="hidden" name="zoneId" value={selectedZoneForNeighborhood} />
+              <Select value={selectedZoneForNeighborhood} onValueChange={setSelectedZoneForNeighborhood}>
                 <SelectTrigger data-testid="select-neighborhood-zone">
                   <SelectValue placeholder="Selecione a zona" />
                 </SelectTrigger>
